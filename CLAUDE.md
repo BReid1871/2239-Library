@@ -14,9 +14,11 @@ final review.
 
 1. A task is handed to a Claude Code session.
 2. The agent explores, drafts a plan, and gets it approved before writing
-   any code.
+   any code. The plan should call out the change's non-functional
+   implications, not just functional ones.
 3. The agent implements the change and opens a PR (using
-   `.github/pull_request_template.md`).
+   `.github/pull_request_template.md`), filling in the template's
+   Non-functional considerations section.
 4. `.github/workflows/ci.yml` runs four checks on the PR: `lint`, `unit`,
    `integration`, `e2e`.
 5. A Claude Code session subscribes to the PR's activity and watches CI.
@@ -24,6 +26,27 @@ final review.
    check is green. `.claude/skills/babysit/SKILL.md` has the repo-specific
    rules for that loop.
 6. A human does the final review — requesting changes or merging.
+
+## Non-functional considerations
+
+Every plan and PR addresses these alongside functional correctness:
+
+- **Security**: new inputs, auth/permission checks, secrets handling, and
+  injection risk (SQL/command/XSS) — flag anything touching the OWASP Top
+  10.
+- **Accessibility**: for any UI change — semantic markup, keyboard
+  navigation, color contrast, ARIA labels.
+- **Performance**: new queries, loops, or payloads that scale badly (N+1
+  queries, unbounded loops, large payloads).
+- **Observability**: logging/metrics for new failure paths, especially
+  anything needed to debug a future CI failure.
+- **Backward compatibility**: API/schema/config changes that break
+  existing callers or need a migration.
+- **Test coverage**: new branches or edge cases actually covered, not
+  just the happy path.
+
+If none apply to a change, say so explicitly in the PR rather than
+omitting the section.
 
 ## Running locally
 
