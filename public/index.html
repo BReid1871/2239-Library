@@ -4,24 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ritual Library</title>
+<link rel="stylesheet" href="shared.css">
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --bg: #ffffff; --bg2: #f5f4f0; --bg3: #eeecea;
-  --text: #1a1a1a; --text2: #555; --text3: #999;
-  --border: rgba(0,0,0,0.12); --border2: rgba(0,0,0,0.22);
-  --radius: 8px; --radius-lg: 12px;
-  --accent: #4f46e5;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1c1c1e; --bg2: #2c2c2e; --bg3: #3a3a3c;
-    --text: #f2f2f7; --text2: #aeaeb2; --text3: #636366;
-    --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.2);
-  }
-}
-body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
-
 /* Three-column layout */
 .app { display: flex; min-height: 100vh; }
 
@@ -80,19 +64,7 @@ body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg);
 .lib-sort select { flex: 1; font-size: 11px; padding: 3px 6px; border: 0.5px solid var(--border2); border-radius: 5px; background: var(--bg2); color: var(--text); outline: none; cursor: pointer; }
 .lib-sort-dir { font-size: 13px; cursor: pointer; color: var(--text3); padding: 1px 4px; border-radius: 4px; user-select: none; }
 .lib-sort-dir:hover { color: var(--text); background: var(--bg2); }
-/* Notes */
-.note-card { background: var(--bg2); border: 0.5px solid var(--border2); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; cursor: pointer; transition: all 0.1s; }
-.note-card:hover { border-color: var(--accent); }
-.note-card.selected { border-color: var(--accent); background: var(--bg); }
-.note-card-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.note-card-preview { font-size: 11px; color: var(--text3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.note-card-date { font-size: 10px; color: var(--text3); margin-top: 3px; }
-.notes-empty { font-size: 13px; color: var(--text3); padding: 2rem 0; text-align: center; }
-.note-editor { display: flex; flex-direction: column; gap: 10px; }
-.note-title-input { font-size: 16px; font-weight: 500; border: none; border-bottom: 0.5px solid var(--border); padding: 4px 0; background: transparent; color: var(--text); outline: none; width: 100%; }
-.note-title-input:focus { border-bottom-color: var(--accent); }
-.note-body-input { flex: 1; border: none; background: transparent; color: var(--text); font-size: 14px; font-family: inherit; line-height: 1.7; outline: none; resize: none; min-height: 300px; }
-.note-meta { font-size: 11px; color: var(--text3); }
+
 /* Custom components */
 .comp-list-item { display: flex; align-items: flex-start; gap: 8px; padding: 7px 9px; border-radius: var(--radius); background: var(--bg2); border: 0.5px solid var(--border); margin-bottom: 6px; }
 .comp-list-item-body { flex: 1; min-width: 0; }
@@ -105,92 +77,6 @@ body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg);
 .comp-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .comp-form-grid .full { grid-column: 1 / -1; }
 
-/* Tabs */
-.tabs { display: flex; border-bottom: 0.5px solid var(--border); margin-bottom: 1.75rem; }
-.tab { padding: 7px 15px; font-size: 13px; cursor: pointer; color: var(--text3); border-bottom: 2px solid transparent; margin-bottom: -0.5px; transition: all 0.1s; user-select: none; }
-.tab:hover { color: var(--text); }
-.tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 500; }
-
-/* Form */
-.form-label { font-size: 12px; color: var(--text3); display: block; margin-bottom: 5px; margin-top: 1.1rem; }
-input[type=text], textarea, select {
-  width: 100%; padding: 8px 10px; border: 0.5px solid var(--border2); border-radius: var(--radius);
-  background: var(--bg); color: var(--text); font-size: 13px; font-family: inherit; outline: none;
-}
-input[type=text]:focus, textarea:focus, select:focus { border-color: var(--accent); }
-textarea { resize: vertical; min-height: 100px; line-height: 1.55; }
-select { cursor: pointer; }
-.required-star { color: #dc2626; margin-left: 2px; }
-
-/* Pills */
-.pill-group { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
-.tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 99px; font-size: 12px; cursor: pointer; border: 0.5px solid var(--border2); background: var(--bg2); color: var(--text2); transition: all 0.1s; user-select: none; }
-.tag.on { background: var(--bg); color: var(--text); border-color: var(--accent); font-weight: 500; }
-.tag:hover:not(.off) { border-color: var(--text2); color: var(--text); }
-.tag.off { opacity: 0.28; cursor: not-allowed; pointer-events: none; }
-.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; border: 0.5px solid rgba(128,128,128,0.25); }
-.sub-note { font-size: 11px; color: var(--text3); margin-left: 6px; }
-
-/* Buttons */
-.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 1.5rem; align-items: center; }
-button { padding: 6px 15px; border-radius: var(--radius); border: 0.5px solid var(--border2); background: transparent; color: var(--text); font-size: 13px; cursor: pointer; transition: all 0.1s; }
-button:hover:not(:disabled) { background: var(--bg2); }
-button:active:not(:disabled) { transform: scale(0.98); }
-button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 500; }
-button.primary:hover:not(:disabled) { opacity: 0.9; }
-button.danger { color: #dc2626; border-color: rgba(220,38,38,0.28); }
-button.danger:hover:not(:disabled) { background: rgba(220,38,38,0.07); }
-
-/* Detail */
-.card { border: 0.5px solid var(--border2); border-radius: var(--radius-lg); padding: 1.5rem; }
-.ritual-name { font-size: 21px; font-weight: 500; margin-bottom: 6px; }
-.badge { display: inline-flex; font-size: 11px; font-weight: 500; padding: 2px 9px; border-radius: 99px; margin-right: 4px; }
-.rune-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 8px 0 1.1rem; }
-.rune-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text2); }
-.hdivider { border: none; border-top: 0.5px solid var(--border); margin: 0.85rem 0; }
-.fl { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
-.fv { font-size: 14px; line-height: 1.65; margin-bottom: 0.85rem; }
-.detail-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 4px; }
-
-/* Arrays */
-.array-card { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 8px 10px; margin-bottom: 6px; cursor: pointer; transition: all 0.1s; }
-.array-card:hover { border-color: var(--accent); }
-.array-card.selected { border-color: var(--accent); background: var(--bg); }
-.array-card-title { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.array-card-meta { font-size: 10px; color: var(--text3); margin-top: 1px; }
-.array-grid-wrap { flex: 1; overflow: auto; border: 0.5px solid var(--border2); border-radius: var(--radius); background: var(--bg2); position: relative; }
-.array-grid { display: inline-grid; gap: 3px; padding: 12px; min-width: 100%; }
-.array-cell { width: 120px; height: 80px; border: 0.5px dashed var(--border2); border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.1s; position: relative; background: var(--bg); }
-.array-cell:hover { border-color: var(--accent); border-style: solid; }
-.array-cell.has-ritual { border-style: solid; border-color: var(--border2); background: var(--bg); cursor: default; }
-.array-cell.has-ritual:hover { border-color: var(--accent); }
-.array-cell-empty-icon { font-size: 18px; color: var(--text3); line-height: 1; }
-.array-cell-content { width: 100%; height: 100%; padding: 5px 6px; display: flex; flex-direction: column; justify-content: space-between; }
-.array-cell-name { font-size: 10px; font-weight: 500; color: var(--text); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.array-cell-runes { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 3px; }
-.array-cell-dot { width: 6px; height: 6px; border-radius: 50%; border: 0.5px solid rgba(128,128,128,0.2); flex-shrink: 0; }
-.array-cell-actions { display: flex; gap: 3px; margin-top: 3px; }
-.array-cell-btn { font-size: 9px; padding: 1px 5px; border-radius: 4px; border: 0.5px solid var(--border2); background: transparent; color: var(--text3); cursor: pointer; transition: all 0.1s; }
-.array-cell-btn:hover { color: var(--text); background: var(--bg2); }
-.array-cell-btn.remove { color: #dc2626; border-color: rgba(220,38,38,0.28); }
-.array-cell-btn.remove:hover { background: rgba(220,38,38,0.07); }
-.array-picker { position: fixed; background: var(--bg); border: 0.5px solid var(--border2); border-radius: var(--radius-lg); box-shadow: 0 8px 24px rgba(0,0,0,0.18); z-index: 999; width: 240px; max-height: 340px; display: flex; flex-direction: column; }
-.array-picker-search { padding: 8px 10px; border-bottom: 0.5px solid var(--border); }
-.array-picker-search input { width: 100%; padding: 5px 8px; font-size: 12px; border: 0.5px solid var(--border2); border-radius: 5px; background: var(--bg2); color: var(--text); outline: none; }
-.array-picker-list { flex: 1; overflow-y: auto; padding: 6px; }
-.array-picker-item { padding: 6px 8px; border-radius: 5px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px; }
-.array-picker-item:hover { background: var(--bg2); }
-.array-picker-item-name { flex: 1; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.array-picker-item-meta { font-size: 10px; color: var(--text3); }
-.array-picker-empty { font-size: 12px; color: var(--text3); text-align: center; padding: 1rem; }
-.array-picker-cancel { padding: 6px; border-top: 0.5px solid var(--border); text-align: center; }
-.array-picker-cancel button { font-size: 11px; }
-.array-grid-controls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.array-name-input { font-size: 15px; font-weight: 500; border: none; border-bottom: 0.5px solid var(--border); padding: 2px 0; background: transparent; color: var(--text); outline: none; flex: 1; }
-.array-name-input:focus { border-bottom-color: var(--accent); }
-
-.page-title { font-size: 19px; font-weight: 500; margin-bottom: 3px; }
-.page-sub { font-size: 13px; color: var(--text3); margin-bottom: 1.5rem; }
 #form-msg { font-size: 13px; margin-top: 0.75rem; min-height: 1.4em; }
 </style>
 </head>
@@ -242,13 +128,7 @@ button.danger:hover:not(:disabled) { background: rgba(220,38,38,0.07); }
 
   <!-- CENTRE: Main -->
   <main class="main">
-    <div class="tabs">
-      <div class="tab active" id="tab-add"       onclick="switchTab('add')">Add Ritual</div>
-      <div class="tab"        id="tab-notes"    onclick="switchTab('notes')">Notes</div>
-      <div class="tab"        id="tab-comps"    onclick="switchTab('comps')">Components</div>
-      <div class="tab"        id="tab-arrays"   onclick="switchTab('arrays')">Arrays</div>
-      <div class="tab"        id="tab-detail"   onclick="switchTab('detail')" style="display:none">View Ritual</div>
-    </div>
+    <div class="tabs" id="nav"></div>
 
     <!-- Add tab -->
     <div id="pane-add">
@@ -289,23 +169,6 @@ button.danger:hover:not(:disabled) { background: rgba(220,38,38,0.07); }
       <div id="detail-content"></div>
     </div>
 
-    <!-- Notes tab -->
-    <div id="pane-notes" style="display:none">
-      <div style="display:flex;gap:1.5rem;align-items:flex-start;">
-        <!-- Note list -->
-        <div style="width:200px;flex-shrink:0;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-            <span style="font-size:13px;font-weight:500;">Notes</span>
-            <button class="primary" onclick="newNote()" style="font-size:11px;padding:3px 10px;">+ New</button>
-          </div>
-          <div id="note-list"></div>
-        </div>
-        <!-- Note editor -->
-        <div style="flex:1;min-width:0;" id="note-editor-area">
-          <div class="notes-empty">Select a note or create a new one.</div>
-        </div>
-      </div>
-    </div>
   <!-- Components tab -->
     <div id="pane-comps" style="display:none">
       <div class="page-title">Custom Components</div>
@@ -349,26 +212,6 @@ button.danger:hover:not(:disabled) { background: rgba(220,38,38,0.07); }
       <div style="font-size:13px;font-weight:500;margin-bottom:10px;">Your custom components <span id="custom-comp-count" style="font-size:11px;color:var(--text3);font-weight:400;"></span></div>
       <div id="custom-comp-list"></div>
     </div>
-  <!-- Arrays tab -->
-    <div id="pane-arrays" style="display:none">
-      <div style="display:flex;align-items:flex-start;gap:1.5rem;height:calc(100vh - 120px);">
-
-        <!-- Left: array list + controls -->
-        <div style="width:200px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;height:100%;overflow:hidden;">
-          <div style="display:flex;align-items:center;justify-content:space-between;">
-            <span style="font-size:13px;font-weight:500;">Arrays</span>
-            <button class="primary" onclick="newArray()" style="font-size:11px;padding:3px 10px;">+ New</button>
-          </div>
-          <div id="array-list" style="flex:1;overflow-y:auto;"></div>
-        </div>
-
-        <!-- Right: array editor -->
-        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;height:100%;" id="array-editor-area">
-          <div class="notes-empty">Select an array or create a new one.</div>
-        </div>
-
-      </div>
-    </div>
 
   </main>
 
@@ -387,56 +230,16 @@ button.danger:hover:not(:disabled) { background: rgba(220,38,38,0.07); }
 </div>
 
 <script src="reference-data.js"></script>
+<script src="shared.js"></script>
 <script>
-var PURPOSES = ReferenceData.PURPOSES;
-var RUNES = ReferenceData.RUNES;
-var IGNORES = ReferenceData.IGNORES;
-var TIER_COLORS = ReferenceData.TIER_COLORS;
-var COMPONENTS = ReferenceData.COMPONENTS; // built-in reference components
-var getTier = ReferenceData.getTier;
-
-// ── API helper ───────────────────────────────────────────────────────────────
-
-async function api(method, url, body) {
-  var opts = { method: method, headers: {} };
-  if (body !== undefined) {
-    opts.headers['Content-Type'] = 'application/json';
-    opts.body = JSON.stringify(body);
-  }
-  var res = await fetch(url, opts);
-  var data = null;
-  if (res.status !== 204) {
-    try { data = await res.json(); } catch (e) { data = null; }
-  }
-  if (!res.ok) {
-    var err = new Error((data && data.error) || ('Request failed: ' + res.status));
-    err.data = data;
-    err.status = res.status;
-    throw err;
-  }
-  return data;
-}
-
-function debounce(fn, ms) {
-  var t;
-  return function() {
-    var args = arguments, ctx = this;
-    clearTimeout(t);
-    t = setTimeout(function() { fn.apply(ctx, args); }, ms);
-  };
-}
 
 // ── Data (loaded from the server) ───────────────────────────────────────────
 
 var library = [];
-var notes = [];
 var customComponents = [];
-var arrays = [];
 
 async function loadLibrary() { library = await api('GET', '/api/rituals'); renderLibrary(); }
-async function loadNotes() { notes = await api('GET', '/api/notes'); }
 async function loadComponents() { customComponents = await api('GET', '/api/components'); }
-async function loadArrays() { arrays = await api('GET', '/api/arrays'); }
 
 async function deleteEntry(id) {
   await api('DELETE', '/api/rituals/' + id);
@@ -455,23 +258,31 @@ var libPurposeFilter = null;
 var libRuneFilter = null;
 var libSortDir = 'asc';
 var refFilter = null; // selected rune name or null
+var detailTabVisible = false;
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────
 
+function renderIndexNav(activeKey) {
+  renderNav('nav', activeKey, ['add', 'comps'], switchTab);
+  var detailTab = document.createElement('div');
+  detailTab.id = 'tab-detail';
+  detailTab.className = 'tab' + (activeKey === 'detail' ? ' active' : '');
+  detailTab.textContent = 'View Ritual';
+  detailTab.style.display = detailTabVisible ? '' : 'none';
+  detailTab.onclick = function() { switchTab('detail'); };
+  document.getElementById('nav').appendChild(detailTab);
+}
+
 function switchTab(tab) {
-  ['add','notes','comps','detail','arrays'].forEach(function(t) {
+  ['add', 'comps', 'detail'].forEach(function(t) {
     var pane = document.getElementById('pane-' + t);
-    var tabEl = document.getElementById('tab-' + t);
     if (pane) pane.style.display = t === tab ? '' : 'none';
-    if (tabEl) tabEl.className = 'tab' + (t === tab ? ' active' : '');
   });
-  document.getElementById('tab-detail').style.display = tab === 'detail' ? '' : 'none';
-  // ref panel only on add and comps tabs
+  // ref panel only on add, comps, and detail
   var refPanel = document.getElementById('ref-panel');
   if (refPanel) refPanel.style.display = (tab === 'add' || tab === 'comps' || tab === 'detail') ? '' : 'none';
-  if (tab === 'notes') renderNoteList();
   if (tab === 'comps') { populateCompRuneSelect(); renderCustomCompList(); }
-  if (tab === 'arrays') renderArrayList();
+  renderIndexNav(tab);
 }
 
 // ── Library sidebar ──────────────────────────────────────────────────────────
@@ -624,7 +435,7 @@ function openDetail(id) {
   html += '</div>';
 
   document.getElementById('detail-content').innerHTML = html;
-  document.getElementById('tab-detail').style.display = '';
+  detailTabVisible = true;
   switchTab('detail');
 }
 
@@ -653,10 +464,6 @@ function editEntry(id) {
   document.getElementById('form-save-btn').textContent = 'Save changes';
   document.getElementById('form-msg').textContent = '';
   switchTab('add');
-}
-
-function esc(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ── Form rune selectors ───────────────────────────────────────────────────────
@@ -856,7 +663,7 @@ function importLibrary(event) {
     try {
       var parsed = JSON.parse(e.target.result);
       var result = await api('POST', '/api/import', parsed);
-      await Promise.all([loadLibrary(), loadNotes(), loadArrays()]);
+      await loadLibrary();
 
       var msg = 'Imported ' + result.addedR + ' ritual' + (result.addedR !== 1 ? 's' : '');
       if (result.dupesR)   msg += ', skipped ' + result.dupesR + ' duplicate' + (result.dupesR !== 1 ? 's' : '');
@@ -880,108 +687,6 @@ function toggleSortDir() {
   if (btn) btn.textContent = libSortDir === 'asc' ? '⇅' : '⇅';
   btn.style.color = libSortDir === 'desc' ? 'var(--accent)' : 'var(--text3)';
   renderLibrary();
-}
-
-// ── Notes ─────────────────────────────────────────────────────────────────────
-
-var currentNoteId = null;
-
-async function newNote() {
-  var created = await api('POST', '/api/notes', { title: 'Untitled note', body: '' });
-  await loadNotes();
-  renderNoteList();
-  openNote(created.id);
-}
-
-async function deleteNote(id) {
-  await api('DELETE', '/api/notes/' + id);
-  await loadNotes();
-  if (currentNoteId === id) {
-    currentNoteId = null;
-    document.getElementById('note-editor-area').innerHTML = '<div class="notes-empty">Select a note or create a new one.</div>';
-  }
-  renderNoteList();
-}
-
-function renderNoteList() {
-  var el = document.getElementById('note-list');
-  if (!el) return;
-  el.innerHTML = '';
-  if (notes.length === 0) {
-    el.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem 0;">No notes yet.</div>';
-    return;
-  }
-  notes.forEach(function(n) {
-    var card = document.createElement('div');
-    card.className = 'note-card' + (n.id === currentNoteId ? ' selected' : '');
-    var title = document.createElement('div'); title.className = 'note-card-title'; title.textContent = n.title || 'Untitled note';
-    var preview = document.createElement('div'); preview.className = 'note-card-preview'; preview.textContent = (n.body || '').slice(0, 60) || 'Empty note';
-    var date = document.createElement('div'); date.className = 'note-card-date';
-    date.textContent = new Date(n.updatedAt || n.updated_at).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
-    card.appendChild(title); card.appendChild(preview); card.appendChild(date);
-    card.onclick = function() { openNote(n.id); };
-    el.appendChild(card);
-  });
-}
-
-var saveNoteDebounced = debounce(function(id, patch) {
-  api('PUT', '/api/notes/' + id, patch).then(function(updated) {
-    var idx = notes.findIndex(function(n) { return n.id === id; });
-    if (idx >= 0) notes[idx] = updated;
-    renderNoteList();
-  }).catch(function(e) { console.error('Failed to save note', e); });
-}, 400);
-
-function openNote(id) {
-  var n = null;
-  for (var i = 0; i < notes.length; i++) { if (notes[i].id === id) { n = notes[i]; break; } }
-  if (!n) return;
-  currentNoteId = id;
-  renderNoteList();
-
-  var area = document.getElementById('note-editor-area');
-  area.innerHTML = '';
-
-  var editor = document.createElement('div');
-  editor.className = 'note-editor';
-
-  var titleInput = document.createElement('input');
-  titleInput.type = 'text';
-  titleInput.className = 'note-title-input';
-  titleInput.placeholder = 'Note title…';
-  titleInput.value = n.title || '';
-  titleInput.oninput = function() {
-    n.title = titleInput.value;
-    saveNoteDebounced(id, { title: n.title, body: n.body });
-  };
-
-  var bodyInput = document.createElement('textarea');
-  bodyInput.className = 'note-body-input';
-  bodyInput.placeholder = 'Write your note here…';
-  bodyInput.value = n.body || '';
-  bodyInput.oninput = function() {
-    n.body = bodyInput.value;
-    saveNoteDebounced(id, { title: n.title, body: n.body });
-  };
-
-  var meta = document.createElement('div');
-  meta.className = 'note-meta';
-  var updated = new Date(n.updatedAt || n.updated_at);
-  meta.textContent = 'Last updated ' + updated.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) + ' at ' + updated.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
-
-  var delBtn = document.createElement('button');
-  delBtn.className = 'danger';
-  delBtn.textContent = 'Delete note';
-  delBtn.style.fontSize = '12px';
-  delBtn.style.marginTop = '1rem';
-  delBtn.onclick = function() { if (confirm('Delete this note?')) deleteNote(id); };
-
-  editor.appendChild(titleInput);
-  editor.appendChild(bodyInput);
-  editor.appendChild(meta);
-  editor.appendChild(delBtn);
-  area.appendChild(editor);
-  titleInput.focus();
 }
 
 // ── Custom components ────────────────────────────────────────────────────────
@@ -1129,345 +834,16 @@ function renderCustomCompList() {
   });
 }
 
-// ── Arrays ───────────────────────────────────────────────────────────────────
-
-var currentArrayId = null;
-
-function getArray(id) {
-  for (var i = 0; i < arrays.length; i++) { if (arrays[i].id === id) return arrays[i]; }
-  return null;
-}
-
-function saveArray(arr) {
-  api('PUT', '/api/arrays/' + arr.id, { name: arr.name, rows: arr.rows, cols: arr.cols, cells: arr.cells })
-    .catch(function(e) { console.error('Failed to save array', e); });
-}
-
-var saveArrayDebounced = debounce(saveArray, 400);
-
-async function newArray() {
-  var created = await api('POST', '/api/arrays', { name: 'Untitled Array', rows: 4, cols: 4, cells: {} });
-  await loadArrays();
-  renderArrayList();
-  openArray(created.id);
-}
-
-async function deleteArray(id) {
-  var arr = getArray(id);
-  if (!arr || !confirm('Delete array "' + arr.name + '"?')) return;
-  await api('DELETE', '/api/arrays/' + id);
-  await loadArrays();
-  if (currentArrayId === id) {
-    currentArrayId = null;
-    document.getElementById('array-editor-area').innerHTML = '<div class="notes-empty">Select an array or create a new one.</div>';
-  }
-  renderArrayList();
-}
-
-function renderArrayList() {
-  var el = document.getElementById('array-list');
-  if (!el) return;
-  el.innerHTML = '';
-  if (arrays.length === 0) {
-    el.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem 0;">No arrays yet.</div>';
-    return;
-  }
-  arrays.forEach(function(arr) {
-    var card = document.createElement('div');
-    card.className = 'array-card' + (arr.id === currentArrayId ? ' selected' : '');
-    var title = document.createElement('div'); title.className = 'array-card-title'; title.textContent = arr.name;
-    var ritualCount = Object.keys(arr.cells).length;
-    var meta = document.createElement('div'); meta.className = 'array-card-meta';
-    meta.textContent = arr.rows + '×' + arr.cols + ' · ' + ritualCount + ' ritual' + (ritualCount !== 1 ? 's' : '');
-    card.appendChild(title); card.appendChild(meta);
-    card.onclick = function() { openArray(arr.id); };
-    el.appendChild(card);
-  });
-}
-
-function openArray(id) {
-  var arr = getArray(id);
-  if (!arr) return;
-  currentArrayId = id;
-  renderArrayList();
-  renderArrayEditor(arr);
-}
-
-function renderArrayEditor(arr) {
-  var area = document.getElementById('array-editor-area');
-  area.innerHTML = '';
-
-  // Top bar: name + controls
-  var topBar = document.createElement('div');
-  topBar.style.cssText = 'display:flex;align-items:center;gap:10px;flex-shrink:0;';
-
-  var nameInput = document.createElement('input');
-  nameInput.type = 'text';
-  nameInput.className = 'array-name-input';
-  nameInput.value = arr.name;
-  nameInput.oninput = function() {
-    arr.name = nameInput.value;
-    renderArrayList();
-    saveArrayDebounced(arr);
-  };
-
-  // Grid size controls
-  var sizeLabel = document.createElement('span');
-  sizeLabel.style.cssText = 'font-size:11px;color:var(--text3);flex-shrink:0;';
-  sizeLabel.textContent = 'Grid:';
-
-  function makeSpinner(label, getValue, onChange) {
-    var wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;align-items:center;gap:3px;';
-    var lbl = document.createElement('span'); lbl.style.cssText = 'font-size:11px;color:var(--text3);'; lbl.textContent = label;
-    var dec = document.createElement('button'); dec.textContent = '−'; dec.style.cssText = 'padding:2px 6px;font-size:12px;';
-    var val = document.createElement('span'); val.style.cssText = 'font-size:12px;min-width:18px;text-align:center;'; val.textContent = getValue();
-    var inc = document.createElement('button'); inc.textContent = '+'; inc.style.cssText = 'padding:2px 6px;font-size:12px;';
-    dec.onclick = function() { onChange(-1); val.textContent = getValue(); };
-    inc.onclick = function() { onChange(1);  val.textContent = getValue(); };
-    wrap.appendChild(lbl); wrap.appendChild(dec); wrap.appendChild(val); wrap.appendChild(inc);
-    return wrap;
-  }
-
-  var rowSpinner = makeSpinner('Rows ', function(){ return arr.rows; }, function(d){
-    var n = Math.max(1, Math.min(12, arr.rows + d));
-    if (n < arr.rows) { // removing rows — clear cells in removed rows
-      for (var r = n; r < arr.rows; r++) for (var c = 0; c < arr.cols; c++) delete arr.cells[r+','+c];
-    }
-    arr.rows = n; renderArrayEditor(arr); renderArrayList(); saveArray(arr);
-  });
-
-  var colSpinner = makeSpinner('Cols ', function(){ return arr.cols; }, function(d){
-    var n = Math.max(1, Math.min(16, arr.cols + d));
-    if (n < arr.cols) {
-      for (var r = 0; r < arr.rows; r++) for (var c = n; c < arr.cols; c++) delete arr.cells[r+','+c];
-    }
-    arr.cols = n; renderArrayEditor(arr); renderArrayList(); saveArray(arr);
-  });
-
-  var delBtn = document.createElement('button');
-  delBtn.className = 'danger';
-  delBtn.textContent = 'Delete';
-  delBtn.style.cssText = 'font-size:11px;padding:3px 10px;flex-shrink:0;';
-  delBtn.onclick = function() { deleteArray(arr.id); };
-
-  topBar.appendChild(nameInput);
-  topBar.appendChild(sizeLabel);
-  topBar.appendChild(rowSpinner);
-  topBar.appendChild(colSpinner);
-  topBar.appendChild(delBtn);
-
-  // Grid
-  var gridWrap = document.createElement('div');
-  gridWrap.className = 'array-grid-wrap';
-
-  var grid = document.createElement('div');
-  grid.className = 'array-grid';
-  grid.style.gridTemplateColumns = 'repeat(' + arr.cols + ', 120px)';
-  grid.style.gridTemplateRows = 'repeat(' + arr.rows + ', 80px)';
-
-  for (var r = 0; r < arr.rows; r++) {
-    for (var c = 0; c < arr.cols; c++) {
-      (function(row, col) {
-        var key = row + ',' + col;
-        var cell = document.createElement('div');
-        var ritualId = arr.cells[key];
-        var ritual = ritualId ? getRitualById(ritualId) : null;
-
-        if (ritual) {
-          cell.className = 'array-cell has-ritual';
-          var content = document.createElement('div');
-          content.className = 'array-cell-content';
-
-          var nameEl = document.createElement('div');
-          nameEl.className = 'array-cell-name';
-          nameEl.textContent = ritual.name;
-
-          var runesEl = document.createElement('div');
-          runesEl.className = 'array-cell-runes';
-          // primary dot
-          var pr = getRune(ritual.primary);
-          if (pr) {
-            var d = document.createElement('span');
-            d.className = 'array-cell-dot';
-            d.style.background = pr.color;
-            d.title = pr.name;
-            runesEl.appendChild(d);
-          }
-          // sub dots (up to 6 to avoid overflow)
-          var subs = (ritual.subs || []).slice(0, 6);
-          subs.forEach(function(s) {
-            var sr = getRune(s);
-            if (!sr) return;
-            var sd = document.createElement('span');
-            sd.className = 'array-cell-dot';
-            sd.style.background = sr.color;
-            sd.title = sr.name;
-            runesEl.appendChild(sd);
-          });
-          if ((ritual.subs||[]).length > 6) {
-            var more = document.createElement('span');
-            more.style.cssText = 'font-size:8px;color:var(--text3);';
-            more.textContent = '+' + ((ritual.subs||[]).length - 6);
-            runesEl.appendChild(more);
-          }
-
-          var actions = document.createElement('div');
-          actions.className = 'array-cell-actions';
-
-          var viewBtn = document.createElement('button');
-          viewBtn.className = 'array-cell-btn';
-          viewBtn.textContent = 'View';
-          viewBtn.onclick = function(e) { e.stopPropagation(); openDetail(ritualId); switchTab('detail'); };
-
-          var removeBtn = document.createElement('button');
-          removeBtn.className = 'array-cell-btn remove';
-          removeBtn.textContent = '✕';
-          removeBtn.onclick = function(e) {
-            e.stopPropagation();
-            delete arr.cells[key];
-            renderArrayEditor(arr);
-            renderArrayList();
-            saveArray(arr);
-          };
-
-          actions.appendChild(viewBtn);
-          actions.appendChild(removeBtn);
-          content.appendChild(nameEl);
-          content.appendChild(runesEl);
-          content.appendChild(actions);
-          cell.appendChild(content);
-
-        } else {
-          cell.className = 'array-cell';
-          var icon = document.createElement('div');
-          icon.className = 'array-cell-empty-icon';
-          icon.textContent = '+';
-          cell.appendChild(icon);
-          cell.onclick = function() { openRitualPicker(arr, row, col); };
-        }
-
-        grid.appendChild(cell);
-      })(r, c);
-    }
-  }
-
-  gridWrap.appendChild(grid);
-  area.appendChild(topBar);
-  area.appendChild(gridWrap);
-}
-
-function getRitualById(id) {
-  for (var i = 0; i < library.length; i++) { if (library[i].id === id) return library[i]; }
-  return null;
-}
-
-function getRune(name) {
-  for (var i = 0; i < RUNES.length; i++) { if (RUNES[i].name === name) return RUNES[i]; }
-  return null;
-}
-
-function openRitualPicker(arr, row, col) {
-  closePicker();
-  var picker = document.createElement('div');
-  picker.className = 'array-picker';
-  picker.id = 'ritual-picker';
-
-  var searchWrap = document.createElement('div');
-  searchWrap.className = 'array-picker-search';
-  var searchInput = document.createElement('input');
-  searchInput.placeholder = 'Search rituals…';
-  searchInput.type = 'text';
-  searchWrap.appendChild(searchInput);
-
-  var list = document.createElement('div');
-  list.className = 'array-picker-list';
-
-  function renderPickerList(q) {
-    list.innerHTML = '';
-    var filtered = library.filter(function(r) {
-      if (!q) return true;
-      return r.name.toLowerCase().indexOf(q) >= 0 ||
-             r.primary.toLowerCase().indexOf(q) >= 0 ||
-             r.purpose.toLowerCase().indexOf(q) >= 0;
-    });
-    // exclude already placed rituals
-    var placed = Object.values(arr.cells);
-    filtered = filtered.filter(function(r) { return placed.indexOf(r.id) < 0; });
-    if (filtered.length === 0) {
-      list.innerHTML = '<div class="array-picker-empty">No rituals found.</div>';
-      return;
-    }
-    filtered.forEach(function(r) {
-      var item = document.createElement('div');
-      item.className = 'array-picker-item';
-      var pr = getRune(r.primary);
-      var dot = document.createElement('span');
-      dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:' + (pr?pr.color:'#ccc') + ';flex-shrink:0;border:0.5px solid rgba(128,128,128,0.2);';
-      var nameEl = document.createElement('span'); nameEl.className = 'array-picker-item-name'; nameEl.textContent = r.name;
-      var meta = document.createElement('span'); meta.className = 'array-picker-item-meta';
-      var tc = TIER_COLORS[r.tier]||'#999';
-      meta.innerHTML = '<span style="color:'+tc+';font-weight:500">'+r.tier+'</span>';
-      item.appendChild(dot); item.appendChild(nameEl); item.appendChild(meta);
-      item.onclick = function() {
-        arr.cells[row+','+col] = r.id;
-        closePicker();
-        renderArrayEditor(arr);
-        renderArrayList();
-        saveArray(arr);
-      };
-      list.appendChild(item);
-    });
-  }
-
-  searchInput.oninput = function() { renderPickerList(searchInput.value.toLowerCase()); };
-  renderPickerList('');
-
-  var cancelWrap = document.createElement('div');
-  cancelWrap.className = 'array-picker-cancel';
-  var cancelBtn = document.createElement('button');
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.onclick = closePicker;
-  cancelWrap.appendChild(cancelBtn);
-
-  picker.appendChild(searchWrap);
-  picker.appendChild(list);
-  picker.appendChild(cancelWrap);
-
-  document.body.appendChild(picker);
-
-  // Position near centre of screen
-  picker.style.top = '50%';
-  picker.style.left = '50%';
-  picker.style.transform = 'translate(-50%, -50%)';
-
-  setTimeout(function() { searchInput.focus(); }, 50);
-
-  // Close on outside click
-  setTimeout(function() {
-    document.addEventListener('click', outsidePickerClick);
-  }, 10);
-}
-
-function outsidePickerClick(e) {
-  var picker = document.getElementById('ritual-picker');
-  if (picker && !picker.contains(e.target)) { closePicker(); }
-}
-
-function closePicker() {
-  var picker = document.getElementById('ritual-picker');
-  if (picker) picker.parentNode.removeChild(picker);
-  document.removeEventListener('click', outsidePickerClick);
-}
-
 // ── Init ─────────────────────────────────────────────────────────────────────
 
 async function init() {
   renderFormPrimary();
   renderFormSubs();
-  await Promise.all([loadLibrary(), loadNotes(), loadComponents(), loadArrays()]);
+  await Promise.all([loadLibrary(), loadComponents()]);
   renderRef();
   renderCustomCompList();
+  if (window.location.hash === '#comps') switchTab('comps');
+  else renderIndexNav('add');
 }
 init();
 </script>

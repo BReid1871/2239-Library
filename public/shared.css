@@ -1,0 +1,73 @@
+/* Shared across all pages: reset, theme tokens, nav, forms, buttons, and the
+   ritual-card primitives (badge/rune-row/etc.) reused by the array preview. */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #ffffff; --bg2: #f5f4f0; --bg3: #eeecea;
+  --text: #1a1a1a; --text2: #555; --text3: #999;
+  --border: rgba(0,0,0,0.12); --border2: rgba(0,0,0,0.22);
+  --radius: 8px; --radius-lg: 12px;
+  --accent: #4f46e5;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1e; --bg2: #2c2c2e; --bg3: #3a3a3c;
+    --text: #f2f2f7; --text2: #aeaeb2; --text3: #636366;
+    --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.2);
+  }
+}
+body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
+
+/* Tabs / top nav */
+.tabs { display: flex; border-bottom: 0.5px solid var(--border); margin-bottom: 1.75rem; }
+.tab { padding: 7px 15px; font-size: 13px; cursor: pointer; color: var(--text3); border-bottom: 2px solid transparent; margin-bottom: -0.5px; transition: all 0.1s; user-select: none; text-decoration: none; display: inline-block; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 500; }
+
+/* Form */
+.form-label { font-size: 12px; color: var(--text3); display: block; margin-bottom: 5px; margin-top: 1.1rem; }
+input[type=text], textarea, select {
+  width: 100%; padding: 8px 10px; border: 0.5px solid var(--border2); border-radius: var(--radius);
+  background: var(--bg); color: var(--text); font-size: 13px; font-family: inherit; outline: none;
+}
+input[type=text]:focus, textarea:focus, select:focus { border-color: var(--accent); }
+textarea { resize: vertical; min-height: 100px; line-height: 1.55; }
+select { cursor: pointer; }
+.required-star { color: #dc2626; margin-left: 2px; }
+
+/* Pills */
+.pill-group { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 99px; font-size: 12px; cursor: pointer; border: 0.5px solid var(--border2); background: var(--bg2); color: var(--text2); transition: all 0.1s; user-select: none; }
+.tag.on { background: var(--bg); color: var(--text); border-color: var(--accent); font-weight: 500; }
+.tag:hover:not(.off) { border-color: var(--text2); color: var(--text); }
+.tag.off { opacity: 0.28; cursor: not-allowed; pointer-events: none; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; border: 0.5px solid rgba(128,128,128,0.25); }
+.sub-note { font-size: 11px; color: var(--text3); margin-left: 6px; }
+
+/* Buttons */
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 1.5rem; align-items: center; }
+button { padding: 6px 15px; border-radius: var(--radius); border: 0.5px solid var(--border2); background: transparent; color: var(--text); font-size: 13px; cursor: pointer; transition: all 0.1s; }
+button:hover:not(:disabled) { background: var(--bg2); }
+button:active:not(:disabled) { transform: scale(0.98); }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 500; }
+button.primary:hover:not(:disabled) { opacity: 0.9; }
+button.danger { color: #dc2626; border-color: rgba(220,38,38,0.28); }
+button.danger:hover:not(:disabled) { background: rgba(220,38,38,0.07); }
+
+/* Ritual card primitives (detail view + array ritual-preview modal) */
+.card { border: 0.5px solid var(--border2); border-radius: var(--radius-lg); padding: 1.5rem; }
+.ritual-name { font-size: 21px; font-weight: 500; margin-bottom: 6px; }
+.badge { display: inline-flex; font-size: 11px; font-weight: 500; padding: 2px 9px; border-radius: 99px; margin-right: 4px; }
+.rune-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 8px 0 1.1rem; }
+.rune-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text2); }
+.hdivider { border: none; border-top: 0.5px solid var(--border); margin: 0.85rem 0; }
+.fl { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
+.fv { font-size: 14px; line-height: 1.65; margin-bottom: 0.85rem; }
+.detail-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 4px; }
+
+.page-title { font-size: 19px; font-weight: 500; margin-bottom: 3px; }
+.page-sub { font-size: 13px; color: var(--text3); margin-bottom: 1.5rem; }
+.notes-empty { font-size: 13px; color: var(--text3); padding: 2rem 0; text-align: center; }
+
+/* Standalone page layout (notes.html, arrays.html) — index.html uses its own
+   three-column .app layout instead. */
+.page-wrap { max-width: 1100px; margin: 0 auto; padding: 2rem 1.75rem 4rem; }

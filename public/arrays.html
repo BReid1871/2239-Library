@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arrays — Ritual Library</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+.array-card { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 8px 10px; margin-bottom: 6px; cursor: pointer; transition: all 0.1s; }
+.array-card:hover { border-color: var(--accent); }
+.array-card.selected { border-color: var(--accent); background: var(--bg); }
+.array-card-title { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.array-card-meta { font-size: 10px; color: var(--text3); margin-top: 1px; }
+.array-grid-wrap { flex: 1; overflow: auto; border: 0.5px solid var(--border2); border-radius: var(--radius); background: var(--bg2); position: relative; }
+.array-grid { display: inline-grid; gap: 3px; padding: 12px; min-width: 100%; }
+.array-cell { width: 120px; height: 80px; border: 0.5px dashed var(--border2); border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.1s; position: relative; background: var(--bg); }
+.array-cell:hover { border-color: var(--accent); border-style: solid; }
+.array-cell.has-ritual { border-style: solid; border-color: var(--border2); background: var(--bg); cursor: default; }
+.array-cell.has-ritual:hover { border-color: var(--accent); }
+.array-cell-empty-icon { font-size: 18px; color: var(--text3); line-height: 1; }
+.array-cell-content { width: 100%; height: 100%; padding: 5px 6px; display: flex; flex-direction: column; justify-content: space-between; }
+.array-cell-name { font-size: 10px; font-weight: 500; color: var(--text); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.array-cell-runes { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 3px; }
+.array-cell-dot { width: 6px; height: 6px; border-radius: 50%; border: 0.5px solid rgba(128,128,128,0.2); flex-shrink: 0; }
+.array-cell-actions { display: flex; gap: 3px; margin-top: 3px; }
+.array-cell-btn { font-size: 9px; padding: 1px 5px; border-radius: 4px; border: 0.5px solid var(--border2); background: transparent; color: var(--text3); cursor: pointer; transition: all 0.1s; }
+.array-cell-btn:hover { color: var(--text); background: var(--bg2); }
+.array-cell-btn.remove { color: #dc2626; border-color: rgba(220,38,38,0.28); }
+.array-cell-btn.remove:hover { background: rgba(220,38,38,0.07); }
+.array-picker { position: fixed; background: var(--bg); border: 0.5px solid var(--border2); border-radius: var(--radius-lg); box-shadow: 0 8px 24px rgba(0,0,0,0.18); z-index: 999; width: 240px; max-height: 340px; display: flex; flex-direction: column; }
+.array-picker-search { padding: 8px 10px; border-bottom: 0.5px solid var(--border); }
+.array-picker-search input { width: 100%; padding: 5px 8px; font-size: 12px; border: 0.5px solid var(--border2); border-radius: 5px; background: var(--bg2); color: var(--text); outline: none; }
+.array-picker-list { flex: 1; overflow-y: auto; padding: 6px; }
+.array-picker-item { padding: 6px 8px; border-radius: 5px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.array-picker-item:hover { background: var(--bg2); }
+.array-picker-item-name { flex: 1; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.array-picker-item-meta { font-size: 10px; color: var(--text3); }
+.array-picker-empty { font-size: 12px; color: var(--text3); text-align: center; padding: 1rem; }
+.array-picker-cancel { padding: 6px; border-top: 0.5px solid var(--border); text-align: center; }
+.array-picker-cancel button { font-size: 11px; }
+.array-grid-controls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.array-name-input { font-size: 15px; font-weight: 500; border: none; border-bottom: 0.5px solid var(--border); padding: 2px 0; background: transparent; color: var(--text); outline: none; flex: 1; }
+.array-name-input:focus { border-bottom-color: var(--accent); }
+#ritual-preview-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+#ritual-preview-overlay .card { max-width: 420px; width: 90vw; background: var(--bg); }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <div class="tabs" id="nav"></div>
+
+  <div style="display:flex;align-items:flex-start;gap:1.5rem;height:calc(100vh - 160px);">
+
+    <!-- Left: array list + controls -->
+    <div style="width:200px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;height:100%;overflow:hidden;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-size:13px;font-weight:500;">Arrays</span>
+        <button class="primary" onclick="newArray()" style="font-size:11px;padding:3px 10px;">+ New</button>
+      </div>
+      <div id="array-list" style="flex:1;overflow-y:auto;"></div>
+    </div>
+
+    <!-- Right: array editor -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;height:100%;" id="array-editor-area">
+      <div class="notes-empty">Select an array or create a new one.</div>
+    </div>
+
+  </div>
+</div>
+
+<script src="reference-data.js"></script>
+<script src="shared.js"></script>
+<script>
+renderNav('nav', 'arrays', [], function() {});
+
+// ── Data ─────────────────────────────────────────────────────────────────────
+
+var library = [];
+var arrays = [];
+async function loadLibrary() { library = await api('GET', '/api/rituals'); }
+async function loadArrays() { arrays = await api('GET', '/api/arrays'); }
+
+function getRitualById(id) {
+  for (var i = 0; i < library.length; i++) { if (library[i].id === id) return library[i]; }
+  return null;
+}
+
+// ── Ritual preview (read-only — full detail/edit lives on the Add Ritual page) ─
+
+function openRitualPreview(id) {
+  var r = getRitualById(id);
+  if (!r) return;
+  closeRitualPreview();
+
+  var pr = getRune(r.primary);
+  var ignored = IGNORES[r.primary] || [];
+  var subs = r.subs || [];
+  var activeSubs = subs.filter(function(s) { return ignored.indexOf(s) < 0; });
+  var tc = TIER_COLORS[r.tier] || '#999';
+
+  var chipHTML = '';
+  if (pr) chipHTML += '<span class="rune-chip"><span class="dot" style="background:' + pr.color + '"></span>' + esc(r.primary) + '</span>';
+  activeSubs.forEach(function(s) {
+    var sr = getRune(s);
+    chipHTML += '<span class="rune-chip" style="color:var(--text3)">+ <span class="dot" style="background:' + (sr ? sr.color : '#ccc') + '"></span>' + esc(s) + '</span>';
+  });
+
+  var html = '<div class="card">';
+  html += '<div class="detail-top">';
+  html += '<div><div class="ritual-name">' + esc(r.name) + '</div>';
+  html += '<div>';
+  html += '<span class="badge" style="background:' + tc + '22;color:' + tc + ';border:0.5px solid ' + tc + '44">' + r.tier + '</span>';
+  html += '<span class="badge" style="background:var(--bg2);color:var(--text2);border:0.5px solid var(--border)">' + esc(r.purpose) + '</span>';
+  html += '</div></div>';
+  html += '<button id="ritual-preview-close">Close</button>';
+  html += '</div>';
+  html += '<div class="rune-row">' + chipHTML + '</div>';
+  html += '<hr class="hdivider">';
+  html += '<div class="fl">Effect</div><div class="fv">' + esc(r.effect || '') + '</div>';
+  var d = new Date(r.createdAt);
+  html += '<div style="margin-top:0.5rem;font-size:11px;color:var(--text3)">Added ' + d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}) + ' · ' + subs.length + ' subsidiary rune' + (subs.length !== 1 ? 's' : '') + '</div>';
+  html += '</div>';
+
+  var overlay = document.createElement('div');
+  overlay.id = 'ritual-preview-overlay';
+  overlay.innerHTML = html;
+  overlay.onclick = function(e) { if (e.target === overlay) closeRitualPreview(); };
+  document.body.appendChild(overlay);
+  document.getElementById('ritual-preview-close').onclick = closeRitualPreview;
+}
+
+function closeRitualPreview() {
+  var overlay = document.getElementById('ritual-preview-overlay');
+  if (overlay) overlay.parentNode.removeChild(overlay);
+}
+
+// ── Arrays ───────────────────────────────────────────────────────────────────
+
+var currentArrayId = null;
+
+function getArray(id) {
+  for (var i = 0; i < arrays.length; i++) { if (arrays[i].id === id) return arrays[i]; }
+  return null;
+}
+
+function saveArray(arr) {
+  api('PUT', '/api/arrays/' + arr.id, { name: arr.name, rows: arr.rows, cols: arr.cols, cells: arr.cells })
+    .catch(function(e) { console.error('Failed to save array', e); });
+}
+
+var saveArrayDebounced = debounce(saveArray, 400);
+
+async function newArray() {
+  var created = await api('POST', '/api/arrays', { name: 'Untitled Array', rows: 4, cols: 4, cells: {} });
+  await loadArrays();
+  renderArrayList();
+  openArray(created.id);
+}
+
+async function deleteArray(id) {
+  var arr = getArray(id);
+  if (!arr || !confirm('Delete array "' + arr.name + '"?')) return;
+  await api('DELETE', '/api/arrays/' + id);
+  await loadArrays();
+  if (currentArrayId === id) {
+    currentArrayId = null;
+    document.getElementById('array-editor-area').innerHTML = '<div class="notes-empty">Select an array or create a new one.</div>';
+  }
+  renderArrayList();
+}
+
+function renderArrayList() {
+  var el = document.getElementById('array-list');
+  if (!el) return;
+  el.innerHTML = '';
+  if (arrays.length === 0) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem 0;">No arrays yet.</div>';
+    return;
+  }
+  arrays.forEach(function(arr) {
+    var card = document.createElement('div');
+    card.className = 'array-card' + (arr.id === currentArrayId ? ' selected' : '');
+    var title = document.createElement('div'); title.className = 'array-card-title'; title.textContent = arr.name;
+    var ritualCount = Object.keys(arr.cells).length;
+    var meta = document.createElement('div'); meta.className = 'array-card-meta';
+    meta.textContent = arr.rows + '×' + arr.cols + ' · ' + ritualCount + ' ritual' + (ritualCount !== 1 ? 's' : '');
+    card.appendChild(title); card.appendChild(meta);
+    card.onclick = function() { openArray(arr.id); };
+    el.appendChild(card);
+  });
+}
+
+function openArray(id) {
+  var arr = getArray(id);
+  if (!arr) return;
+  currentArrayId = id;
+  renderArrayList();
+  renderArrayEditor(arr);
+}
+
+function renderArrayEditor(arr) {
+  var area = document.getElementById('array-editor-area');
+  area.innerHTML = '';
+
+  // Top bar: name + controls
+  var topBar = document.createElement('div');
+  topBar.style.cssText = 'display:flex;align-items:center;gap:10px;flex-shrink:0;';
+
+  var nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.className = 'array-name-input';
+  nameInput.value = arr.name;
+  nameInput.oninput = function() {
+    arr.name = nameInput.value;
+    renderArrayList();
+    saveArrayDebounced(arr);
+  };
+
+  // Grid size controls
+  var sizeLabel = document.createElement('span');
+  sizeLabel.style.cssText = 'font-size:11px;color:var(--text3);flex-shrink:0;';
+  sizeLabel.textContent = 'Grid:';
+
+  function makeSpinner(label, getValue, onChange) {
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:3px;';
+    var lbl = document.createElement('span'); lbl.style.cssText = 'font-size:11px;color:var(--text3);'; lbl.textContent = label;
+    var dec = document.createElement('button'); dec.textContent = '−'; dec.style.cssText = 'padding:2px 6px;font-size:12px;';
+    var val = document.createElement('span'); val.style.cssText = 'font-size:12px;min-width:18px;text-align:center;'; val.textContent = getValue();
+    var inc = document.createElement('button'); inc.textContent = '+'; inc.style.cssText = 'padding:2px 6px;font-size:12px;';
+    dec.onclick = function() { onChange(-1); val.textContent = getValue(); };
+    inc.onclick = function() { onChange(1);  val.textContent = getValue(); };
+    wrap.appendChild(lbl); wrap.appendChild(dec); wrap.appendChild(val); wrap.appendChild(inc);
+    return wrap;
+  }
+
+  var rowSpinner = makeSpinner('Rows ', function(){ return arr.rows; }, function(d){
+    var n = Math.max(1, Math.min(12, arr.rows + d));
+    if (n < arr.rows) { // removing rows — clear cells in removed rows
+      for (var r = n; r < arr.rows; r++) for (var c = 0; c < arr.cols; c++) delete arr.cells[r+','+c];
+    }
+    arr.rows = n; renderArrayEditor(arr); renderArrayList(); saveArray(arr);
+  });
+
+  var colSpinner = makeSpinner('Cols ', function(){ return arr.cols; }, function(d){
+    var n = Math.max(1, Math.min(16, arr.cols + d));
+    if (n < arr.cols) {
+      for (var r = 0; r < arr.rows; r++) for (var c = n; c < arr.cols; c++) delete arr.cells[r+','+c];
+    }
+    arr.cols = n; renderArrayEditor(arr); renderArrayList(); saveArray(arr);
+  });
+
+  var delBtn = document.createElement('button');
+  delBtn.className = 'danger';
+  delBtn.textContent = 'Delete';
+  delBtn.style.cssText = 'font-size:11px;padding:3px 10px;flex-shrink:0;';
+  delBtn.onclick = function() { deleteArray(arr.id); };
+
+  topBar.appendChild(nameInput);
+  topBar.appendChild(sizeLabel);
+  topBar.appendChild(rowSpinner);
+  topBar.appendChild(colSpinner);
+  topBar.appendChild(delBtn);
+
+  // Grid
+  var gridWrap = document.createElement('div');
+  gridWrap.className = 'array-grid-wrap';
+
+  var grid = document.createElement('div');
+  grid.className = 'array-grid';
+  grid.style.gridTemplateColumns = 'repeat(' + arr.cols + ', 120px)';
+  grid.style.gridTemplateRows = 'repeat(' + arr.rows + ', 80px)';
+
+  for (var r = 0; r < arr.rows; r++) {
+    for (var c = 0; c < arr.cols; c++) {
+      (function(row, col) {
+        var key = row + ',' + col;
+        var cell = document.createElement('div');
+        var ritualId = arr.cells[key];
+        var ritual = ritualId ? getRitualById(ritualId) : null;
+
+        if (ritual) {
+          cell.className = 'array-cell has-ritual';
+          var content = document.createElement('div');
+          content.className = 'array-cell-content';
+
+          var nameEl = document.createElement('div');
+          nameEl.className = 'array-cell-name';
+          nameEl.textContent = ritual.name;
+
+          var runesEl = document.createElement('div');
+          runesEl.className = 'array-cell-runes';
+          // primary dot
+          var pr = getRune(ritual.primary);
+          if (pr) {
+            var d = document.createElement('span');
+            d.className = 'array-cell-dot';
+            d.style.background = pr.color;
+            d.title = pr.name;
+            runesEl.appendChild(d);
+          }
+          // sub dots (up to 6 to avoid overflow)
+          var subs = (ritual.subs || []).slice(0, 6);
+          subs.forEach(function(s) {
+            var sr = getRune(s);
+            if (!sr) return;
+            var sd = document.createElement('span');
+            sd.className = 'array-cell-dot';
+            sd.style.background = sr.color;
+            sd.title = sr.name;
+            runesEl.appendChild(sd);
+          });
+          if ((ritual.subs||[]).length > 6) {
+            var more = document.createElement('span');
+            more.style.cssText = 'font-size:8px;color:var(--text3);';
+            more.textContent = '+' + ((ritual.subs||[]).length - 6);
+            runesEl.appendChild(more);
+          }
+
+          var actions = document.createElement('div');
+          actions.className = 'array-cell-actions';
+
+          var viewBtn = document.createElement('button');
+          viewBtn.className = 'array-cell-btn';
+          viewBtn.textContent = 'View';
+          viewBtn.onclick = function(e) { e.stopPropagation(); openRitualPreview(ritualId); };
+
+          var removeBtn = document.createElement('button');
+          removeBtn.className = 'array-cell-btn remove';
+          removeBtn.textContent = '✕';
+          removeBtn.onclick = function(e) {
+            e.stopPropagation();
+            delete arr.cells[key];
+            renderArrayEditor(arr);
+            renderArrayList();
+            saveArray(arr);
+          };
+
+          actions.appendChild(viewBtn);
+          actions.appendChild(removeBtn);
+          content.appendChild(nameEl);
+          content.appendChild(runesEl);
+          content.appendChild(actions);
+          cell.appendChild(content);
+
+        } else {
+          cell.className = 'array-cell';
+          var icon = document.createElement('div');
+          icon.className = 'array-cell-empty-icon';
+          icon.textContent = '+';
+          cell.appendChild(icon);
+          cell.onclick = function() { openRitualPicker(arr, row, col); };
+        }
+
+        grid.appendChild(cell);
+      })(r, c);
+    }
+  }
+
+  gridWrap.appendChild(grid);
+  area.appendChild(topBar);
+  area.appendChild(gridWrap);
+}
+
+function openRitualPicker(arr, row, col) {
+  closePicker();
+  var picker = document.createElement('div');
+  picker.className = 'array-picker';
+  picker.id = 'ritual-picker';
+
+  var searchWrap = document.createElement('div');
+  searchWrap.className = 'array-picker-search';
+  var searchInput = document.createElement('input');
+  searchInput.placeholder = 'Search rituals…';
+  searchInput.type = 'text';
+  searchWrap.appendChild(searchInput);
+
+  var list = document.createElement('div');
+  list.className = 'array-picker-list';
+
+  function renderPickerList(q) {
+    list.innerHTML = '';
+    var filtered = library.filter(function(r) {
+      if (!q) return true;
+      return r.name.toLowerCase().indexOf(q) >= 0 ||
+             r.primary.toLowerCase().indexOf(q) >= 0 ||
+             r.purpose.toLowerCase().indexOf(q) >= 0;
+    });
+    // exclude already placed rituals
+    var placed = Object.values(arr.cells);
+    filtered = filtered.filter(function(r) { return placed.indexOf(r.id) < 0; });
+    if (filtered.length === 0) {
+      list.innerHTML = '<div class="array-picker-empty">No rituals found.</div>';
+      return;
+    }
+    filtered.forEach(function(r) {
+      var item = document.createElement('div');
+      item.className = 'array-picker-item';
+      var pr = getRune(r.primary);
+      var dot = document.createElement('span');
+      dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:' + (pr?pr.color:'#ccc') + ';flex-shrink:0;border:0.5px solid rgba(128,128,128,0.2);';
+      var nameEl = document.createElement('span'); nameEl.className = 'array-picker-item-name'; nameEl.textContent = r.name;
+      var meta = document.createElement('span'); meta.className = 'array-picker-item-meta';
+      var tc = TIER_COLORS[r.tier]||'#999';
+      meta.innerHTML = '<span style="color:'+tc+';font-weight:500">'+r.tier+'</span>';
+      item.appendChild(dot); item.appendChild(nameEl); item.appendChild(meta);
+      item.onclick = function() {
+        arr.cells[row+','+col] = r.id;
+        closePicker();
+        renderArrayEditor(arr);
+        renderArrayList();
+        saveArray(arr);
+      };
+      list.appendChild(item);
+    });
+  }
+
+  searchInput.oninput = function() { renderPickerList(searchInput.value.toLowerCase()); };
+  renderPickerList('');
+
+  var cancelWrap = document.createElement('div');
+  cancelWrap.className = 'array-picker-cancel';
+  var cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = closePicker;
+  cancelWrap.appendChild(cancelBtn);
+
+  picker.appendChild(searchWrap);
+  picker.appendChild(list);
+  picker.appendChild(cancelWrap);
+
+  document.body.appendChild(picker);
+
+  // Position near centre of screen
+  picker.style.top = '50%';
+  picker.style.left = '50%';
+  picker.style.transform = 'translate(-50%, -50%)';
+
+  setTimeout(function() { searchInput.focus(); }, 50);
+
+  // Close on outside click
+  setTimeout(function() {
+    document.addEventListener('click', outsidePickerClick);
+  }, 10);
+}
+
+function outsidePickerClick(e) {
+  var picker = document.getElementById('ritual-picker');
+  if (picker && !picker.contains(e.target)) { closePicker(); }
+}
+
+function closePicker() {
+  var picker = document.getElementById('ritual-picker');
+  if (picker) picker.parentNode.removeChild(picker);
+  document.removeEventListener('click', outsidePickerClick);
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+
+async function init() {
+  await Promise.all([loadLibrary(), loadArrays()]);
+  renderArrayList();
+}
+init();
+</script>
+</body>
+</html>
