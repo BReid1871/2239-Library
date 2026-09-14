@@ -154,13 +154,6 @@
       <label class="form-label">Subsidiary runes <span class="sub-note" id="f-sub-note">(0 — Low tier)</span></label>
       <div class="pill-group" id="f-subs"></div>
 
-      <label class="form-label">Size <span class="sub-note" id="f-size-note">(range 2 hexes)</span></label>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <button type="button" onclick="adjustSize(-1)" style="padding:2px 10px;">&minus;</button>
-        <span id="f-size-value" style="font-size:13px;min-width:16px;text-align:center;">1</span>
-        <button type="button" onclick="adjustSize(1)" style="padding:2px 10px;">+</button>
-      </div>
-
       <label class="form-label">Effect <span class="required-star">*</span></label>
       <textarea id="f-effect" placeholder="Describe what the ritual does…"></textarea>
 
@@ -237,7 +230,6 @@
 </div>
 
 <script src="reference-data.js"></script>
-<script src="hex.js"></script>
 <script src="shared.js"></script>
 <script>
 
@@ -259,7 +251,6 @@ async function deleteEntry(id) {
 
 var fPrimary = null;
 var fSubs = {};
-var fSize = 1;
 var fEditId = null;
 var currentDetailId = null;
 var libFilter = null;      // tier
@@ -388,7 +379,7 @@ function renderLibrary() {
       var tierSpan = document.createElement('span');
       tierSpan.style.color = tc; tierSpan.style.fontWeight = '500'; tierSpan.textContent = r.tier;
       metaEl.appendChild(tierSpan);
-      metaEl.appendChild(document.createTextNode(' · ' + r.purpose + ' · ' + r.primary + (r.size > 1 ? ' · Size ' + r.size : '')));
+      metaEl.appendChild(document.createTextNode(' · ' + r.purpose + ' · ' + r.primary));
       div.appendChild(nameEl); div.appendChild(metaEl);
       div.onclick = function() { openDetail(r.id); };
       list.appendChild(div);
@@ -430,7 +421,6 @@ function openDetail(id) {
   html += '<div style="margin-bottom:8px">';
   html += '<span class="badge" style="background:' + tc + '22;color:' + tc + ';border:0.5px solid ' + tc + '44">' + r.tier + '</span>';
   html += '<span class="badge" style="background:var(--bg2);color:var(--text2);border:0.5px solid var(--border)">' + esc(r.purpose) + '</span>';
-  html += '<span class="badge" style="background:var(--bg2);color:var(--text2);border:0.5px solid var(--border)">Size ' + (r.size || 1) + ' · Range ' + Hex.rangeForSize(r.size || 1) + '</span>';
   html += '</div></div>';
   html += '<div style="display:flex;gap:6px;align-items:center;">';
   html += '<button onclick="editEntry(\'' + r.id + '\')">Edit</button>';
@@ -467,10 +457,8 @@ function editEntry(id) {
   fPrimary = r.primary;
   fSubs = {};
   (r.subs || []).forEach(function(s) { fSubs[s] = true; });
-  fSize = r.size || 1;
   renderFormPrimary();
   renderFormSubs();
-  renderFormSize();
   document.getElementById('form-add-title').textContent = 'Edit Ritual';
   document.getElementById('form-add-sub').textContent = 'Update the details below and save.';
   document.getElementById('form-save-btn').textContent = 'Save changes';
@@ -526,16 +514,6 @@ function renderFormSubs() {
   });
 }
 
-function adjustSize(delta) {
-  fSize = Math.min(Math.max(fSize + delta, 1), Hex.MAX_RITUAL_SIZE);
-  renderFormSize();
-}
-
-function renderFormSize() {
-  document.getElementById('f-size-value').textContent = fSize;
-  document.getElementById('f-size-note').textContent = '(range ' + Hex.rangeForSize(fSize) + ' hexes)';
-}
-
 // ── Save / clear form ─────────────────────────────────────────────────────────
 
 async function saveRitual() {
@@ -547,7 +525,7 @@ async function saveRitual() {
   if (!fPrimary){ showMsg('Please select a primary rune.', '#dc2626'); return; }
   if (!effect)  { showMsg('Please describe the effect.', '#dc2626'); return; }
   var subs = Object.keys(fSubs);
-  var payload = { name: name, purpose: purpose, primary: fPrimary, subs: subs, effect: effect, size: fSize };
+  var payload = { name: name, purpose: purpose, primary: fPrimary, subs: subs, effect: effect };
 
   try {
     if (fEditId) {
@@ -577,11 +555,11 @@ function clearForm() {
   document.getElementById('f-purpose').value = '';
   document.getElementById('f-effect').value = '';
   document.getElementById('form-msg').textContent = '';
-  fPrimary = null; fSubs = {}; fSize = 1; fEditId = null;
+  fPrimary = null; fSubs = {}; fEditId = null;
   document.getElementById('form-add-title').textContent = 'Add a Ritual';
   document.getElementById('form-add-sub').textContent = 'Record a ritual and save it to your library.';
   document.getElementById('form-save-btn').textContent = 'Save to library';
-  renderFormPrimary(); renderFormSubs(); renderFormSize();
+  renderFormPrimary(); renderFormSubs();
 }
 
 // ── Reference panel ───────────────────────────────────────────────────────────
@@ -861,7 +839,6 @@ function renderCustomCompList() {
 async function init() {
   renderFormPrimary();
   renderFormSubs();
-  renderFormSize();
   await Promise.all([loadLibrary(), loadComponents()]);
   renderRef();
   renderCustomCompList();

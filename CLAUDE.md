@@ -84,8 +84,11 @@ they default to `library_test` on localhost if no env vars are set.
   built-in components) shared between server and browser — not user data,
   so it isn't in the DB.
 - `public/hex.js` — hex-grid math (axial coordinates, distance, footprint,
-  pixel layout) shared between `arrays.html`'s hex board and both server
-  routes (ritual/board size limits) and its own unit tests.
+  pixel layout) shared between `arrays.html`'s hex board, the
+  `server/routes/arrays.js`/`data.js` board-radius guard rail, and its own
+  unit tests. Ritual size is a property of an array *placement*
+  (`{ id, ritualId, q, r, size }` in `arrays.placements`), not of the
+  ritual itself — the same ritual can be placed at different sizes.
 - `tests/helpers/testDb.js` — the shared MySQL pool integration tests use,
   reset with `TRUNCATE` in each test's `beforeEach` (see
   `vitest.config.js`'s `fileParallelism: false` — test files run
