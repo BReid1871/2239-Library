@@ -1,0 +1,25 @@
+{
+  "name": "2239-library",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ritual library: a DB-backed website for tracking rituals, notes, custom components, and arrays.",
+  "type": "commonjs",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "lint": "eslint .",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "playwright test tests/e2e"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "express": "^4.21.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0",
+    "eslint": "^9.11.0",
+    "supertest": "^7.0.0",
+    "vitest": "^5.0.0"
+  }
+}
