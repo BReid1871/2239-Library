@@ -52,3 +52,27 @@ test('rejects a name longer than 255 characters with a 400 instead of a DB error
   expect(res.status).toBe(400);
   expect(res.body.error).toMatch(/255/);
 });
+
+test('rejects a rune longer than 64 characters with a 400 instead of a DB error', async () => {
+  const res = await request(app)
+    .post('/api/components')
+    .send({ name: 'Overlong Rune', rune: 'x'.repeat(65), tier: 'Low', desc: 'Too long' });
+  expect(res.status).toBe(400);
+  expect(res.body.error).toMatch(/64/);
+});
+
+test('rejects a tier longer than 16 characters with a 400 instead of a DB error', async () => {
+  const res = await request(app)
+    .post('/api/components')
+    .send({ name: 'Overlong Tier', rune: 'Order', tier: 'x'.repeat(17), desc: 'Too long' });
+  expect(res.status).toBe(400);
+  expect(res.body.error).toMatch(/16/);
+});
+
+test('rejects a description over 65535 bytes with a 400 instead of a DB error', async () => {
+  const res = await request(app)
+    .post('/api/components')
+    .send({ name: 'Overlong Desc', rune: 'Order', tier: 'Low', desc: 'x'.repeat(65536) });
+  expect(res.status).toBe(400);
+  expect(res.body.error).toMatch(/too long/i);
+});

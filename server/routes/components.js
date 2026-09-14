@@ -14,6 +14,17 @@ function componentsRouter(db) {
     return customRows.some((c) => c.id !== excludeId && c.name.toLowerCase() === lower);
   }
 
+  // Mirrors the DB column limits (rune/tier VARCHAR, desc TEXT) so an
+  // oversized field is rejected with a clear 400 instead of surfacing as a
+  // generic 500 from MySQL's ER_DATA_TOO_LONG.
+  function fieldTooLongError(name, rune, tier, desc) {
+    if (String(name).trim().length > 255) return 'Name must be 255 characters or fewer.';
+    if (String(rune).length > 64) return 'Rune must be 64 characters or fewer.';
+    if (String(tier).length > 16) return 'Tier must be 16 characters or fewer.';
+    if (Buffer.byteLength(String(desc).trim(), 'utf8') > 65535) return 'Description is too long.';
+    return null;
+  }
+
   router.get('/', asyncHandler(async (req, res) => {
     const [rows] = await db.query('SELECT * FROM custom_components');
     res.json(rows);
@@ -25,7 +36,8 @@ function componentsRouter(db) {
     if (!rune) return res.status(400).json({ error: 'Please select a rune.' });
     if (!tier) return res.status(400).json({ error: 'Please select a tier.' });
     if (!desc || !String(desc).trim()) return res.status(400).json({ error: 'Please enter a description.' });
-    if (String(name).trim().length > 255) return res.status(400).json({ error: 'Name must be 255 characters or fewer.' });
+    const lengthError = fieldTooLongError(name, rune, tier, desc);
+    if (lengthError) return res.status(400).json({ error: lengthError });
 
     if (await nameTaken(String(name).trim(), rune, null)) {
       return res.status(409).json({ error: `A component with this name already exists for ${rune}.` });
@@ -57,7 +69,8 @@ function componentsRouter(db) {
     if (!rune) return res.status(400).json({ error: 'Please select a rune.' });
     if (!tier) return res.status(400).json({ error: 'Please select a tier.' });
     if (!desc || !String(desc).trim()) return res.status(400).json({ error: 'Please enter a description.' });
-    if (String(name).trim().length > 255) return res.status(400).json({ error: 'Name must be 255 characters or fewer.' });
+    const lengthError = fieldTooLongError(name, rune, tier, desc);
+    if (lengthError) return res.status(400).json({ error: lengthError });
 
     if (await nameTaken(String(name).trim(), rune, req.params.id)) {
       return res.status(409).json({ error: `A component with this name already exists for ${rune}.` });
