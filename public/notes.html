@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notes — Ritual Library</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+.note-card { background: var(--bg2); border: 0.5px solid var(--border2); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; cursor: pointer; transition: all 0.1s; }
+.note-card:hover { border-color: var(--accent); }
+.note-card.selected { border-color: var(--accent); background: var(--bg); }
+.note-card-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note-card-preview { font-size: 11px; color: var(--text3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note-card-date { font-size: 10px; color: var(--text3); margin-top: 3px; }
+.note-editor { display: flex; flex-direction: column; gap: 10px; }
+.note-title-input { font-size: 16px; font-weight: 500; border: none; border-bottom: 0.5px solid var(--border); padding: 4px 0; background: transparent; color: var(--text); outline: none; width: 100%; }
+.note-title-input:focus { border-bottom-color: var(--accent); }
+.note-body-input { flex: 1; border: none; background: transparent; color: var(--text); font-size: 14px; font-family: inherit; line-height: 1.7; outline: none; resize: none; min-height: 300px; }
+.note-meta { font-size: 11px; color: var(--text3); }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+  <div class="tabs" id="nav"></div>
+
+  <div style="display:flex;gap:1.5rem;align-items:flex-start;">
+    <!-- Note list -->
+    <div style="width:200px;flex-shrink:0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <span style="font-size:13px;font-weight:500;">Notes</span>
+        <button class="primary" onclick="newNote()" style="font-size:11px;padding:3px 10px;">+ New</button>
+      </div>
+      <div id="note-list"></div>
+    </div>
+    <!-- Note editor -->
+    <div style="flex:1;min-width:0;" id="note-editor-area">
+      <div class="notes-empty">Select a note or create a new one.</div>
+    </div>
+  </div>
+</div>
+
+<script src="reference-data.js"></script>
+<script src="shared.js"></script>
+<script>
+renderNav('nav', 'notes', [], function() {});
+
+// ── Data ─────────────────────────────────────────────────────────────────────
+
+var notes = [];
+async function loadNotes() { notes = await api('GET', '/api/notes'); }
+
+var currentNoteId = null;
+
+async function newNote() {
+  var created = await api('POST', '/api/notes', { title: 'Untitled note', body: '' });
+  await loadNotes();
+  renderNoteList();
+  openNote(created.id);
+}
+
+async function deleteNote(id) {
+  await api('DELETE', '/api/notes/' + id);
+  await loadNotes();
+  if (currentNoteId === id) {
+    currentNoteId = null;
+    document.getElementById('note-editor-area').innerHTML = '<div class="notes-empty">Select a note or create a new one.</div>';
+  }
+  renderNoteList();
+}
+
+function renderNoteList() {
+  var el = document.getElementById('note-list');
+  if (!el) return;
+  el.innerHTML = '';
+  if (notes.length === 0) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem 0;">No notes yet.</div>';
+    return;
+  }
+  notes.forEach(function(n) {
+    var card = document.createElement('div');
+    card.className = 'note-card' + (n.id === currentNoteId ? ' selected' : '');
+    var title = document.createElement('div'); title.className = 'note-card-title'; title.textContent = n.title || 'Untitled note';
+    var preview = document.createElement('div'); preview.className = 'note-card-preview'; preview.textContent = (n.body || '').slice(0, 60) || 'Empty note';
+    var date = document.createElement('div'); date.className = 'note-card-date';
+    date.textContent = new Date(n.updatedAt || n.updated_at).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+    card.appendChild(title); card.appendChild(preview); card.appendChild(date);
+    card.onclick = function() { openNote(n.id); };
+    el.appendChild(card);
+  });
+}
+
+var saveNoteDebounced = debounce(function(id, patch) {
+  api('PUT', '/api/notes/' + id, patch).then(function(updated) {
+    var idx = notes.findIndex(function(n) { return n.id === id; });
+    if (idx >= 0) notes[idx] = updated;
+    renderNoteList();
+  }).catch(function(e) { console.error('Failed to save note', e); });
+}, 400);
+
+function openNote(id) {
+  var n = null;
+  for (var i = 0; i < notes.length; i++) { if (notes[i].id === id) { n = notes[i]; break; } }
+  if (!n) return;
+  currentNoteId = id;
+  renderNoteList();
+
+  var area = document.getElementById('note-editor-area');
+  area.innerHTML = '';
+
+  var editor = document.createElement('div');
+  editor.className = 'note-editor';
+
+  var titleInput = document.createElement('input');
+  titleInput.type = 'text';
+  titleInput.className = 'note-title-input';
+  titleInput.placeholder = 'Note title…';
+  titleInput.value = n.title || '';
+  titleInput.oninput = function() {
+    n.title = titleInput.value;
+    saveNoteDebounced(id, { title: n.title, body: n.body });
+  };
+
+  var bodyInput = document.createElement('textarea');
+  bodyInput.className = 'note-body-input';
+  bodyInput.placeholder = 'Write your note here…';
+  bodyInput.value = n.body || '';
+  bodyInput.oninput = function() {
+    n.body = bodyInput.value;
+    saveNoteDebounced(id, { title: n.title, body: n.body });
+  };
+
+  var meta = document.createElement('div');
+  meta.className = 'note-meta';
+  var updated = new Date(n.updatedAt || n.updated_at);
+  meta.textContent = 'Last updated ' + updated.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) + ' at ' + updated.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+
+  var delBtn = document.createElement('button');
+  delBtn.className = 'danger';
+  delBtn.textContent = 'Delete note';
+  delBtn.style.fontSize = '12px';
+  delBtn.style.marginTop = '1rem';
+  delBtn.onclick = function() { if (confirm('Delete this note?')) deleteNote(id); };
+
+  editor.appendChild(titleInput);
+  editor.appendChild(bodyInput);
+  editor.appendChild(meta);
+  editor.appendChild(delBtn);
+  area.appendChild(editor);
+  titleInput.focus();
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+
+async function init() {
+  await loadNotes();
+  renderNoteList();
+}
+init();
+</script>
+</body>
+</html>

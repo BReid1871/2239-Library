@@ -25,6 +25,7 @@ module.exports = [
         confirm: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
+        ReferenceData: 'readonly',
       },
     },
     rules: {
