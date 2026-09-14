@@ -1,6 +1,11 @@
 const path = require('path');
 const express = require('express');
 const { openDb } = require('./db');
+const { ritualsRouter } = require('./routes/rituals');
+const { notesRouter } = require('./routes/notes');
+const { componentsRouter } = require('./routes/components');
+const { arraysRouter } = require('./routes/arrays');
+const { dataRouter } = require('./routes/data');
 
 function createApp() {
   const app = express();
@@ -13,6 +18,12 @@ function createApp() {
     const row = db.prepare('SELECT 1 AS ok').get();
     res.json({ ok: row.ok === 1 });
   });
+
+  app.use('/api/rituals', ritualsRouter(db));
+  app.use('/api/notes', notesRouter(db));
+  app.use('/api/components', componentsRouter(db));
+  app.use('/api/arrays', arraysRouter(db));
+  app.use('/api', dataRouter(db));
 
   return app;
 }

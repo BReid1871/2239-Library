@@ -36,8 +36,16 @@ make ci               # run everything: lint, unit, integration, e2e
 
 - `server/index.js` — Express app: serves `public/` as static files and
   mounts the JSON API under `/api`.
-- `server/db.js` — SQLite connection (`better-sqlite3`) and schema.
-- `public/` — the frontend (single-page app, no build step).
+- `server/db.js` — SQLite connection (`better-sqlite3`) and schema
+  (`rituals`, `notes`, `custom_components`, `arrays`).
+- `server/routes/` — one Express router per resource, plus `data.js` for
+  `GET /api/export` / `POST /api/import`.
+- `server/lib/rituals.js` — shared duplicate-ritual check.
+- `public/index.html` — the frontend (single-page app, no build step);
+  talks to the API via `fetch()`, no client-side storage.
+- `public/reference-data.js` — static app config (runes, tier rules,
+  built-in components) shared between server and browser — not user data,
+  so it isn't in the DB.
 - `data/` — gitignored; holds the SQLite database file, created on
   startup.
 - `tests/unit`, `tests/integration`, `tests/e2e` — run via `ci/*.sh` /
