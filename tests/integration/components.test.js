@@ -44,3 +44,11 @@ test('rejects a name that collides with another custom component for the same ru
     .send({ name: 'unique thing', rune: 'Order', tier: 'Mid', desc: 'Second, different case' });
   expect(dupe.status).toBe(409);
 });
+
+test('rejects a name longer than 255 characters with a 400 instead of a DB error', async () => {
+  const res = await request(app)
+    .post('/api/components')
+    .send({ name: 'x'.repeat(256), rune: 'Order', tier: 'Low', desc: 'Too long' });
+  expect(res.status).toBe(400);
+  expect(res.body.error).toMatch(/255/);
+});
