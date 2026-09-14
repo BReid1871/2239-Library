@@ -13,10 +13,6 @@ const SCHEMA_STATEMENTS = [
     effect TEXT NOT NULL,
     created_at VARCHAR(32) NOT NULL
   )`,
-  // How many hexes this ritual occupies/reaches in an array — see
-  // public/hex.js. Added after the initial rituals table, hence the
-  // separate idempotent ALTER rather than a column on the CREATE above.
-  'ALTER TABLE rituals ADD COLUMN IF NOT EXISTS size INT NOT NULL DEFAULT 1',
   `CREATE TABLE IF NOT EXISTS notes (
     id VARCHAR(36) PRIMARY KEY,
     title VARCHAR(255) NOT NULL DEFAULT '',
@@ -33,11 +29,11 @@ const SCHEMA_STATEMENTS = [
   )`,
   // Hex-grid board: `radius` hex-rings out from the center, `placements` is
   // a JSON list of { id, ritualId, q, r } — see public/hex.js. Arrays used
-  // to be a rectangular rows/cols/cells grid; the ALTERs below migrate an
-  // existing deployment's table shape, but placements are position data
-  // tied to the old square coordinates and can't be translated onto a hex
-  // board, so any previously-placed rituals are dropped (name/timestamps
-  // are kept).
+  // to be a rectangular rows/cols/cells grid; the migrations below (see
+  // MIGRATIONS) handle an existing deployment's table shape, but
+  // placements are position data tied to the old square coordinates and
+  // can't be translated onto a hex board, so any previously-placed
+  // rituals are dropped (name/timestamps are kept).
   `CREATE TABLE IF NOT EXISTS arrays (
     id VARCHAR(36) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -46,11 +42,20 @@ const SCHEMA_STATEMENTS = [
     created_at VARCHAR(32) NOT NULL,
     updated_at VARCHAR(32) NOT NULL
   )`,
-  'ALTER TABLE arrays ADD COLUMN IF NOT EXISTS radius INT NOT NULL DEFAULT 3',
-  "ALTER TABLE arrays ADD COLUMN IF NOT EXISTS placements JSON NOT NULL DEFAULT ('[]')",
-  'ALTER TABLE arrays DROP COLUMN IF EXISTS `rows`',
-  'ALTER TABLE arrays DROP COLUMN IF EXISTS cols',
-  'ALTER TABLE arrays DROP COLUMN IF EXISTS cells',
+];
+
+// Real MySQL (unlike MariaDB) never supported ADD/DROP COLUMN ... IF
+// [NOT] EXISTS, so these are applied conditionally in JS instead, each
+// checked against information_schema first.
+const MIGRATIONS = [
+  // How many hexes a ritual occupies/reaches in an array — see
+  // public/hex.js. Added after the initial rituals table.
+  { table: 'rituals', column: 'size', kind: 'add', ddl: 'ALTER TABLE rituals ADD COLUMN size INT NOT NULL DEFAULT 1' },
+  { table: 'arrays', column: 'radius', kind: 'add', ddl: 'ALTER TABLE arrays ADD COLUMN radius INT NOT NULL DEFAULT 3' },
+  { table: 'arrays', column: 'placements', kind: 'add', ddl: "ALTER TABLE arrays ADD COLUMN placements JSON NOT NULL DEFAULT ('[]')" },
+  { table: 'arrays', column: 'rows', kind: 'drop', ddl: 'ALTER TABLE arrays DROP COLUMN `rows`' },
+  { table: 'arrays', column: 'cols', kind: 'drop', ddl: 'ALTER TABLE arrays DROP COLUMN cols' },
+  { table: 'arrays', column: 'cells', kind: 'drop', ddl: 'ALTER TABLE arrays DROP COLUMN cells' },
 ];
 
 function resolveConnectionConfig() {
@@ -72,9 +77,22 @@ function openDb() {
   return mysql.createPool(poolOptions);
 }
 
+async function columnExists(pool, table, column) {
+  const [rows] = await pool.query(
+    'SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+    [table, column]
+  );
+  return rows[0].cnt > 0;
+}
+
 async function initSchema(pool) {
   for (const statement of SCHEMA_STATEMENTS) {
     await pool.query(statement);
+  }
+  for (const migration of MIGRATIONS) {
+    const exists = await columnExists(pool, migration.table, migration.column);
+    const needsRun = migration.kind === 'add' ? !exists : exists;
+    if (needsRun) await pool.query(migration.ddl);
   }
 }
 
