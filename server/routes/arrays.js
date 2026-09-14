@@ -1,5 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
+const { asyncHandler } = require('../lib/asyncHandler');
 
 function rowToArray(row) {
   return {
@@ -16,12 +17,12 @@ function rowToArray(row) {
 function arraysRouter(db) {
   const router = express.Router();
 
-  router.get('/', async (req, res) => {
+  router.get('/', asyncHandler(async (req, res) => {
     const [rows] = await db.query('SELECT * FROM arrays ORDER BY created_at DESC');
     res.json(rows.map(rowToArray));
-  });
+  }));
 
-  router.post('/', async (req, res) => {
+  router.post('/', asyncHandler(async (req, res) => {
     const now = new Date().toISOString();
     const body = req.body || {};
     const row = {
@@ -43,9 +44,9 @@ function arraysRouter(db) {
       row.updated_at,
     ]);
     res.status(201).json(rowToArray(row));
-  });
+  }));
 
-  router.put('/:id', async (req, res) => {
+  router.put('/:id', asyncHandler(async (req, res) => {
     const [existingRows] = await db.query('SELECT * FROM arrays WHERE id = ?', [req.params.id]);
     if (existingRows.length === 0) return res.status(404).json({ error: 'Array not found.' });
     const existing = existingRows[0];
@@ -67,13 +68,13 @@ function arraysRouter(db) {
     ]);
     const [updatedRows] = await db.query('SELECT * FROM arrays WHERE id = ?', [req.params.id]);
     res.json(rowToArray(updatedRows[0]));
-  });
+  }));
 
-  router.delete('/:id', async (req, res) => {
+  router.delete('/:id', asyncHandler(async (req, res) => {
     const [result] = await db.query('DELETE FROM arrays WHERE id = ?', [req.params.id]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Array not found.' });
     res.status(204).end();
-  });
+  }));
 
   return router;
 }

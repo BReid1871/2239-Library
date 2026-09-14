@@ -43,3 +43,16 @@ then pushing.
   `vitest.config.js` sets `fileParallelism: false` — don't remove that
   without also changing the isolation strategy, or test files will race
   on the same tables.
+- **Every route handler must be wrapped in `asyncHandler`**
+  (`server/lib/asyncHandler.js`) — Express 4 does not catch a rejected
+  promise thrown by a bare `async (req, res) => {...}` handler; an
+  unhandled rejection just hangs the request until the platform's proxy
+  (Railway) times it out as an opaque 502, instead of the clean 500 the
+  error-handling middleware in `server/index.js` returns. New route
+  handlers need `asyncHandler(...)` too, not just the existing ones.
+- **`server/db.js`'s `CREATE TABLE IF NOT EXISTS` never alters an
+  existing table.** If the live database's schema has drifted from
+  `SCHEMA_STATEMENTS` (e.g. someone hand-edited a column directly on
+  Railway), deploying new code won't fix it — the mismatch has to be
+  corrected with an explicit `ALTER TABLE`/`CHANGE COLUMN` against the
+  live database, not just a code change.

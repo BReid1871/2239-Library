@@ -4,11 +4,12 @@ const { rowToRitual } = require('./rituals');
 const { rowToArray } = require('./arrays');
 const { ritualsMatch } = require('../lib/rituals');
 const { getTier } = require('../../public/reference-data');
+const { asyncHandler } = require('../lib/asyncHandler');
 
 function dataRouter(db) {
   const router = express.Router();
 
-  router.get('/export', async (req, res) => {
+  router.get('/export', asyncHandler(async (req, res) => {
     const [ritualRows] = await db.query('SELECT * FROM rituals ORDER BY created_at DESC');
     const [noteRows] = await db.query('SELECT * FROM notes ORDER BY created_at DESC');
     const [arrayRows] = await db.query('SELECT * FROM arrays ORDER BY created_at DESC');
@@ -17,9 +18,9 @@ function dataRouter(db) {
       notes: noteRows,
       arrays: arrayRows.map(rowToArray),
     });
-  });
+  }));
 
-  router.post('/import', async (req, res) => {
+  router.post('/import', asyncHandler(async (req, res) => {
     const parsed = req.body || {};
     const importedRituals = Array.isArray(parsed) ? parsed : parsed.rituals || [];
     const importedNotes = Array.isArray(parsed) ? [] : parsed.notes || [];
@@ -92,7 +93,7 @@ function dataRouter(db) {
     }
 
     res.json({ addedR, skippedR, dupesR, addedN, addedA });
-  });
+  }));
 
   return router;
 }

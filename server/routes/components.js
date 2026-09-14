@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const { COMPONENTS } = require('../../public/reference-data');
+const { asyncHandler } = require('../lib/asyncHandler');
 
 function componentsRouter(db) {
   const router = express.Router();
@@ -13,12 +14,12 @@ function componentsRouter(db) {
     return customRows.some((c) => c.id !== excludeId && c.name.toLowerCase() === lower);
   }
 
-  router.get('/', async (req, res) => {
+  router.get('/', asyncHandler(async (req, res) => {
     const [rows] = await db.query('SELECT * FROM custom_components');
     res.json(rows);
-  });
+  }));
 
-  router.post('/', async (req, res) => {
+  router.post('/', asyncHandler(async (req, res) => {
     const { name, rune, tier, desc } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Please enter a name.' });
     if (!rune) return res.status(400).json({ error: 'Please select a rune.' });
@@ -44,9 +45,9 @@ function componentsRouter(db) {
       row.desc,
     ]);
     res.status(201).json(row);
-  });
+  }));
 
-  router.put('/:id', async (req, res) => {
+  router.put('/:id', asyncHandler(async (req, res) => {
     const [existingRows] = await db.query('SELECT * FROM custom_components WHERE id = ?', [req.params.id]);
     if (existingRows.length === 0) return res.status(404).json({ error: 'Component not found.' });
 
@@ -69,13 +70,13 @@ function componentsRouter(db) {
     ]);
     const [updatedRows] = await db.query('SELECT * FROM custom_components WHERE id = ?', [req.params.id]);
     res.json(updatedRows[0]);
-  });
+  }));
 
-  router.delete('/:id', async (req, res) => {
+  router.delete('/:id', asyncHandler(async (req, res) => {
     const [result] = await db.query('DELETE FROM custom_components WHERE id = ?', [req.params.id]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Component not found.' });
     res.status(204).end();
-  });
+  }));
 
   return router;
 }
