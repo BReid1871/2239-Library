@@ -28,8 +28,11 @@ const SCHEMA_STATEMENTS = [
     \`desc\` TEXT NOT NULL
   )`,
   // Hex-grid board: `radius` hex-rings out from the center, `placements` is
-  // a JSON list of { id, ritualId, q, r } — see public/hex.js. Arrays used
-  // to be a rectangular rows/cols/cells grid; the migrations below (see
+  // a JSON list of { id, ritualId, q, r, size } — see public/hex.js. Size
+  // is per-placement, not a property of the ritual: the same ritual can be
+  // placed at different sizes (or placed more than once at different
+  // sizes) across different arrays, or within one array. Arrays used to be
+  // a rectangular rows/cols/cells grid; the migrations below (see
   // MIGRATIONS) handle an existing deployment's table shape, but
   // placements are position data tied to the old square coordinates and
   // can't be translated onto a hex board, so any previously-placed
@@ -48,9 +51,10 @@ const SCHEMA_STATEMENTS = [
 // [NOT] EXISTS, so these are applied conditionally in JS instead, each
 // checked against information_schema first.
 const MIGRATIONS = [
-  // How many hexes a ritual occupies/reaches in an array — see
-  // public/hex.js. Added after the initial rituals table.
-  { table: 'rituals', column: 'size', kind: 'add', ddl: 'ALTER TABLE rituals ADD COLUMN size INT NOT NULL DEFAULT 1' },
+  // A `size` column briefly lived on rituals before size became a
+  // per-placement property of an array instead (see the `arrays` comment
+  // above) — drop it if an earlier deploy already added it.
+  { table: 'rituals', column: 'size', kind: 'drop', ddl: 'ALTER TABLE rituals DROP COLUMN size' },
   { table: 'arrays', column: 'radius', kind: 'add', ddl: 'ALTER TABLE arrays ADD COLUMN radius INT NOT NULL DEFAULT 3' },
   { table: 'arrays', column: 'placements', kind: 'add', ddl: "ALTER TABLE arrays ADD COLUMN placements JSON NOT NULL DEFAULT ('[]')" },
   { table: 'arrays', column: 'rows', kind: 'drop', ddl: 'ALTER TABLE arrays DROP COLUMN `rows`' },

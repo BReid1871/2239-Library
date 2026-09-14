@@ -9,17 +9,19 @@
     root.Hex = factory();
   }
 })(typeof self !== 'undefined' ? self : this, function () {
-  // Guard rails, not game rules — keep a single ritual or a single array
-  // board from generating an unrenderable/slow number of hexes.
-  var MAX_RITUAL_SIZE = 8;
+  // Guard rails, not game rules — keep a single placement or a single
+  // array board from generating an unrenderable/slow number of hexes.
+  var MAX_PLACEMENT_SIZE = 8;
   var MAX_BOARD_RADIUS = 10;
 
   function keyOf(hex) { return hex.q + ',' + hex.r; }
 
-  // Range a ritual's effect reaches, in hex steps, derived from its size.
+  // Range a placement's effect reaches, in hex steps, derived from the
+  // size it was placed at (size is a property of the placement, not the
+  // ritual — the same ritual can be placed at different sizes).
   function rangeForSize(size) { return size * 2; }
 
-  // A ritual of size N occupies the hex disk of radius (N-1) around its
+  // A placement of size N occupies the hex disk of radius (N-1) around its
   // anchor: size 1 = just the anchor; size 2 = the anchor plus the 6 hexes
   // touching it (7 total); size 3 adds the next ring (19 total); etc.
   function footprintRadius(size) { return size - 1; }
@@ -68,7 +70,7 @@
   }
 
   return {
-    MAX_RITUAL_SIZE: MAX_RITUAL_SIZE,
+    MAX_PLACEMENT_SIZE: MAX_PLACEMENT_SIZE,
     MAX_BOARD_RADIUS: MAX_BOARD_RADIUS,
     keyOf: keyOf,
     rangeForSize: rangeForSize,

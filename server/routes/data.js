@@ -1,6 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
-const { rowToRitual, parseSize } = require('./rituals');
+const { rowToRitual } = require('./rituals');
 const { rowToArray } = require('./arrays');
 const { ritualsMatch } = require('../lib/rituals');
 const { getTier } = require('../../public/reference-data');
@@ -45,12 +45,11 @@ function dataRouter(db) {
         subs,
         tier: r.tier || getTier(subs.length),
         effect: r.effect,
-        size: parseSize(r.size),
         created_at: r.createdAt || new Date().toISOString(),
       };
       await db.query(
-        'INSERT INTO rituals (id, name, purpose, primary_rune, subs, tier, effect, size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [row.id, row.name, row.purpose, row.primary_rune, JSON.stringify(row.subs), row.tier, row.effect, row.size, row.created_at]
+        'INSERT INTO rituals (id, name, purpose, primary_rune, subs, tier, effect, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [row.id, row.name, row.purpose, row.primary_rune, JSON.stringify(row.subs), row.tier, row.effect, row.created_at]
       );
       currentRituals.push(rowToRitual(row));
       addedR++;

@@ -23,6 +23,12 @@
 .placement-item-body { flex: 1; min-width: 0; }
 .placement-item-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .placement-item-meta { font-size: 10px; color: var(--text3); margin-top: 1px; }
+.placement-item-size { display: flex; align-items: center; gap: 5px; margin-top: 5px; }
+.placement-item-size button { padding: 1px 6px; font-size: 11px; }
+.placement-item-size span { font-size: 11px; color: var(--text2); min-width: 44px; }
+.picker-size-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 0.5px solid var(--border); font-size: 11px; color: var(--text3); }
+.picker-size-row button { padding: 1px 7px; font-size: 12px; }
+.picker-size-row span { font-size: 12px; color: var(--text); min-width: 14px; text-align: center; }
 .placement-item-actions { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
 .placement-item-actions button { font-size: 10px; padding: 1px 7px; }
 .placement-empty { font-size: 11px; color: var(--text3); text-align: center; padding: 1rem 0.5rem; }
@@ -112,7 +118,6 @@ function openRitualPreview(id) {
   html += '<div>';
   html += '<span class="badge" style="background:' + tc + '22;color:' + tc + ';border:0.5px solid ' + tc + '44">' + r.tier + '</span>';
   html += '<span class="badge" style="background:var(--bg2);color:var(--text2);border:0.5px solid var(--border)">' + esc(r.purpose) + '</span>';
-  html += '<span class="badge" style="background:var(--bg2);color:var(--text2);border:0.5px solid var(--border)">Size ' + (r.size || 1) + ' · Range ' + Hex.rangeForSize(r.size || 1) + '</span>';
   html += '</div></div>';
   html += '<button id="ritual-preview-close">Close</button>';
   html += '</div>';
@@ -207,15 +212,18 @@ function openArray(id) {
 // range — a ritual can be deleted from the library after being placed, and
 // (matching how deleted rituals were already handled before this feature)
 // a placement pointing at a missing ritual is simply skipped everywhere.
+// Size lives on the placement, not the ritual — the same ritual can be
+// placed at different sizes.
 function livePlacements(arr) {
   var out = [];
   (arr.placements || []).forEach(function(p) {
     var ritual = getRitualById(p.ritualId);
     if (!ritual) return;
-    var size = ritual.size || 1;
+    var size = p.size || 1;
     out.push({
       placement: p,
       ritual: ritual,
+      size: size,
       anchor: { q: p.q, r: p.r },
       footprint: Hex.footprintHexes({ q: p.q, r: p.r }, size),
       range: Hex.rangeForSize(size),
@@ -293,7 +301,7 @@ function renderHexBoard(arr, placements) {
       poly.style.fill = rune ? rune.color : '#999';
       poly.style.fillOpacity = isAnchor ? '0.85' : '0.35';
       var title = svgEl('title', {});
-      title.textContent = entry.ritual.name + (isAnchor ? ' (size ' + (entry.ritual.size || 1) + ')' : '');
+      title.textContent = entry.ritual.name + (isAnchor ? ' (size ' + entry.size + ')' : '');
       poly.appendChild(title);
     } else {
       poly.onclick = function() { openRitualPicker(arr, p.hex); };
@@ -345,8 +353,18 @@ function renderPlacementList(arr, placements) {
     body.className = 'placement-item-body';
     var name = document.createElement('div'); name.className = 'placement-item-name'; name.textContent = entry.ritual.name;
     var meta = document.createElement('div'); meta.className = 'placement-item-meta';
-    meta.textContent = 'Size ' + (entry.ritual.size || 1) + ' · Range ' + entry.range;
+    meta.textContent = 'Range ' + entry.range;
     body.appendChild(name); body.appendChild(meta);
+
+    var sizeRow = document.createElement('div');
+    sizeRow.className = 'placement-item-size';
+    var sizeDec = document.createElement('button'); sizeDec.textContent = '−';
+    var sizeVal = document.createElement('span'); sizeVal.textContent = 'Size ' + entry.size;
+    var sizeInc = document.createElement('button'); sizeInc.textContent = '+';
+    sizeDec.onclick = function() { resizePlacement(arr, entry.placement.id, -1); };
+    sizeInc.onclick = function() { resizePlacement(arr, entry.placement.id, 1); };
+    sizeRow.appendChild(sizeDec); sizeRow.appendChild(sizeVal); sizeRow.appendChild(sizeInc);
+    body.appendChild(sizeRow);
 
     var actions = document.createElement('div');
     actions.className = 'placement-item-actions';
@@ -438,13 +456,37 @@ function changeRadius(arr, delta) {
   // rows/cols spinners had.
   if (delta < 0) {
     arr.placements = arr.placements.filter(function(p) {
-      var ritual = getRitualById(p.ritualId);
-      var size = ritual ? (ritual.size || 1) : 1;
-      return Hex.footprintHexes({ q: p.q, r: p.r }, size).every(function(hex) {
+      return Hex.footprintHexes({ q: p.q, r: p.r }, p.size || 1).every(function(hex) {
         return Hex.hexDistance({ q: 0, r: 0 }, hex) <= arr.radius;
       });
     });
   }
+  renderArrayEditor(arr);
+  renderArrayList();
+  saveArray(arr);
+}
+
+// Grows or shrinks one placement's size in place. Growing is validated the
+// same way an initial placement is (must stay on the board, must not
+// overlap another placement's footprint); shrinking is always safe.
+function resizePlacement(arr, placementId, delta) {
+  var p = arr.placements.find(function(x) { return x.id === placementId; });
+  if (!p) return;
+  var current = p.size || 1;
+  var next = Math.max(1, Math.min(Hex.MAX_PLACEMENT_SIZE, current + delta));
+  if (next === current) return;
+
+  if (delta > 0) {
+    var footprint = Hex.footprintHexes({ q: p.q, r: p.r }, next);
+    var withinBoard = footprint.every(function(h) { return Hex.hexDistance({ q: 0, r: 0 }, h) <= arr.radius; });
+    var others = livePlacements(arr).filter(function(entry) { return entry.placement.id !== placementId; });
+    var occupied = occupiedHexMap(others);
+    var overlaps = footprint.some(function(h) { return !!occupied[Hex.keyOf(h)]; });
+    if (!withinBoard) { alert('Growing to size ' + next + ' would overflow the board.'); return; }
+    if (overlaps) { alert('Growing to size ' + next + ' would overlap another ritual placed here.'); return; }
+  }
+
+  p.size = next;
   renderArrayEditor(arr);
   renderArrayList();
   saveArray(arr);
@@ -455,6 +497,28 @@ function openRitualPicker(arr, hex) {
   var picker = document.createElement('div');
   picker.className = 'array-picker';
   picker.id = 'ritual-picker';
+
+  // Size is chosen here, per-placement, before picking a ritual — it's
+  // not a property of the ritual itself.
+  var pickerSize = 1;
+  var sizeRow = document.createElement('div');
+  sizeRow.className = 'picker-size-row';
+  var sizeLabel = document.createElement('span'); sizeLabel.textContent = 'Size:';
+  var sizeDec = document.createElement('button'); sizeDec.textContent = '−'; sizeDec.type = 'button';
+  var sizeVal = document.createElement('span'); sizeVal.textContent = pickerSize;
+  var sizeInc = document.createElement('button'); sizeInc.textContent = '+'; sizeInc.type = 'button';
+  var rangeNote = document.createElement('span'); rangeNote.textContent = '(range ' + Hex.rangeForSize(pickerSize) + ')';
+  sizeDec.onclick = function() {
+    pickerSize = Math.max(1, pickerSize - 1);
+    sizeVal.textContent = pickerSize;
+    rangeNote.textContent = '(range ' + Hex.rangeForSize(pickerSize) + ')';
+  };
+  sizeInc.onclick = function() {
+    pickerSize = Math.min(Hex.MAX_PLACEMENT_SIZE, pickerSize + 1);
+    sizeVal.textContent = pickerSize;
+    rangeNote.textContent = '(range ' + Hex.rangeForSize(pickerSize) + ')';
+  };
+  sizeRow.appendChild(sizeLabel); sizeRow.appendChild(sizeDec); sizeRow.appendChild(sizeVal); sizeRow.appendChild(sizeInc); sizeRow.appendChild(rangeNote);
 
   var searchWrap = document.createElement('div');
   searchWrap.className = 'array-picker-search';
@@ -490,9 +554,10 @@ function openRitualPicker(arr, hex) {
       dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:' + (pr?pr.color:'#ccc') + ';flex-shrink:0;border:0.5px solid rgba(128,128,128,0.2);';
       var nameEl = document.createElement('span'); nameEl.className = 'array-picker-item-name'; nameEl.textContent = r.name;
       var meta = document.createElement('span'); meta.className = 'array-picker-item-meta';
-      meta.textContent = 'Size ' + (r.size || 1);
+      var tc = TIER_COLORS[r.tier] || '#999';
+      meta.innerHTML = '<span style="color:' + tc + ';font-weight:500">' + r.tier + '</span>';
       item.appendChild(dot); item.appendChild(nameEl); item.appendChild(meta);
-      item.onclick = function() { attemptPlacement(arr, hex, r); };
+      item.onclick = function() { attemptPlacement(arr, hex, r, pickerSize); };
       list.appendChild(item);
     });
   }
@@ -507,6 +572,7 @@ function openRitualPicker(arr, hex) {
   cancelBtn.onclick = closePicker;
   cancelWrap.appendChild(cancelBtn);
 
+  picker.appendChild(sizeRow);
   picker.appendChild(searchWrap);
   picker.appendChild(list);
   picker.appendChild(errorEl);
@@ -527,11 +593,12 @@ function openRitualPicker(arr, hex) {
   }, 10);
 }
 
-// Places `ritual` anchored at `hex`, if its footprint fits the board and
-// doesn't overlap anything already placed there. Shows an inline error in
-// the picker instead of closing it if it doesn't fit.
-function attemptPlacement(arr, hex, ritual) {
-  var size = ritual.size || 1;
+// Places `ritual` anchored at `hex` at the chosen `size` (a property of
+// this placement, not the ritual — the same ritual can be placed at
+// different sizes), if its footprint fits the board and doesn't overlap
+// anything already placed there. Shows an inline error in the picker
+// instead of closing it if it doesn't fit.
+function attemptPlacement(arr, hex, ritual, size) {
   var footprint = Hex.footprintHexes(hex, size);
   var withinBoard = footprint.every(function(h) { return Hex.hexDistance({ q: 0, r: 0 }, h) <= arr.radius; });
   var occupied = occupiedHexMap(livePlacements(arr));
@@ -539,15 +606,15 @@ function attemptPlacement(arr, hex, ritual) {
 
   var errorEl = document.querySelector('#ritual-picker .array-picker-error');
   if (!withinBoard) {
-    if (errorEl) errorEl.textContent = '"' + ritual.name + '" (size ' + size + ') doesn’t fit within the board here — try a more central hex or a larger board.';
+    if (errorEl) errorEl.textContent = '"' + ritual.name + '" (size ' + size + ') doesn’t fit within the board here — try a more central hex, a smaller size, or a larger board.';
     return;
   }
   if (overlaps) {
-    if (errorEl) errorEl.textContent = '"' + ritual.name + '" would overlap a ritual already placed here.';
+    if (errorEl) errorEl.textContent = '"' + ritual.name + '" (size ' + size + ') would overlap a ritual already placed here.';
     return;
   }
 
-  arr.placements.push({ id: crypto.randomUUID(), ritualId: ritual.id, q: hex.q, r: hex.r });
+  arr.placements.push({ id: crypto.randomUUID(), ritualId: ritual.id, q: hex.q, r: hex.r, size: size });
   closePicker();
   renderArrayEditor(arr);
   renderArrayList();

@@ -1,7 +1,6 @@
 const express = require('express');
 const crypto = require('crypto');
 const { getTier } = require('../../public/reference-data');
-const { MAX_RITUAL_SIZE } = require('../../public/hex');
 const { ritualsMatch } = require('../lib/rituals');
 const { asyncHandler } = require('../lib/asyncHandler');
 
@@ -14,18 +13,8 @@ function rowToRitual(row) {
     subs: row.subs,
     tier: row.tier,
     effect: row.effect,
-    size: row.size,
     createdAt: row.created_at,
   };
-}
-
-// How many hexes this ritual occupies/reaches in an array (public/hex.js).
-// Defaults to 1 and clamps to a sane range rather than rejecting bad input,
-// matching how the rest of this route treats optional fields.
-function parseSize(value) {
-  const n = parseInt(value, 10);
-  if (!Number.isInteger(n)) return 1;
-  return Math.min(Math.max(n, 1), MAX_RITUAL_SIZE);
 }
 
 function ritualsRouter(db) {
@@ -37,7 +26,7 @@ function ritualsRouter(db) {
   }));
 
   router.post('/', asyncHandler(async (req, res) => {
-    const { name, purpose, primary, subs, effect, size } = req.body || {};
+    const { name, purpose, primary, subs, effect } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Please enter a ritual name.' });
     if (!purpose) return res.status(400).json({ error: 'Please select a purpose.' });
     if (!primary) return res.status(400).json({ error: 'Please select a primary rune.' });
@@ -59,12 +48,11 @@ function ritualsRouter(db) {
       subs: subs || [],
       tier: getTier((subs || []).length),
       effect: String(effect).trim(),
-      size: parseSize(size),
       created_at: new Date().toISOString(),
     };
     await db.query(
-      'INSERT INTO rituals (id, name, purpose, primary_rune, subs, tier, effect, size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [row.id, row.name, row.purpose, row.primary_rune, JSON.stringify(row.subs), row.tier, row.effect, row.size, row.created_at]
+      'INSERT INTO rituals (id, name, purpose, primary_rune, subs, tier, effect, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [row.id, row.name, row.purpose, row.primary_rune, JSON.stringify(row.subs), row.tier, row.effect, row.created_at]
     );
     res.status(201).json(rowToRitual(row));
   }));
@@ -73,7 +61,7 @@ function ritualsRouter(db) {
     const [existingRows] = await db.query('SELECT * FROM rituals WHERE id = ?', [req.params.id]);
     if (existingRows.length === 0) return res.status(404).json({ error: 'Ritual not found.' });
 
-    const { name, purpose, primary, subs, effect, size } = req.body || {};
+    const { name, purpose, primary, subs, effect } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Please enter a ritual name.' });
     if (!purpose) return res.status(400).json({ error: 'Please select a purpose.' });
     if (!primary) return res.status(400).json({ error: 'Please select a primary rune.' });
@@ -88,7 +76,7 @@ function ritualsRouter(db) {
     }
 
     await db.query(
-      'UPDATE rituals SET name=?, purpose=?, primary_rune=?, subs=?, tier=?, effect=?, size=? WHERE id=?',
+      'UPDATE rituals SET name=?, purpose=?, primary_rune=?, subs=?, tier=?, effect=? WHERE id=?',
       [
         String(name).trim(),
         purpose,
@@ -96,7 +84,6 @@ function ritualsRouter(db) {
         JSON.stringify(subs || []),
         getTier((subs || []).length),
         String(effect).trim(),
-        parseSize(size),
         req.params.id,
       ]
     );
@@ -113,4 +100,4 @@ function ritualsRouter(db) {
   return router;
 }
 
-module.exports = { ritualsRouter, rowToRitual, parseSize };
+module.exports = { ritualsRouter, rowToRitual };

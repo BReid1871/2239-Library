@@ -39,23 +39,6 @@ test('creates, lists, updates, and deletes a ritual', async () => {
   expect(listAfter.body).toHaveLength(0);
 });
 
-test('defaults size to 1 and clamps an out-of-range size', async () => {
-  const defaulted = await request(app).post('/api/rituals').send({
-    name: 'Default Size', purpose: 'Boon', primary: 'Aether', subs: [], effect: 'E',
-  });
-  expect(defaulted.body.size).toBe(1);
-
-  const oversized = await request(app).post('/api/rituals').send({
-    name: 'Huge Ritual', purpose: 'Evocation', primary: 'Chaos', subs: [], effect: 'E', size: 999,
-  });
-  expect(oversized.body.size).toBe(8); // clamped to MAX_RITUAL_SIZE
-
-  const update = await request(app)
-    .put('/api/rituals/' + oversized.body.id)
-    .send({ name: 'Huge Ritual', purpose: 'Evocation', primary: 'Chaos', subs: [], effect: 'E', size: 3 });
-  expect(update.body.size).toBe(3);
-});
-
 test('rejects a duplicate purpose+primary+subs combination', async () => {
   const payload = { name: 'First', purpose: 'Boon', primary: 'Aether', subs: ['Ruin'], effect: 'E1' };
   const first = await request(app).post('/api/rituals').send(payload);

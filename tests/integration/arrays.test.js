@@ -20,7 +20,7 @@ test('creates an array with defaults, places a ritual, and deletes it', async ()
   expect(create.body.radius).toBe(3);
   expect(create.body.placements).toEqual([]);
 
-  const placements = [{ id: 'p1', ritualId: ritual.body.id, q: 0, r: 0 }];
+  const placements = [{ id: 'p1', ritualId: ritual.body.id, q: 0, r: 0, size: 1 }];
   const update = await request(app)
     .put('/api/arrays/' + create.body.id)
     .send({ name: 'My Array', radius: 3, placements });
@@ -33,7 +33,7 @@ test('creates an array with defaults, places a ritual, and deletes it', async ()
   expect(list.body).toHaveLength(0);
 });
 
-test('allows placing the same ritual more than once and clamps an out-of-range radius', async () => {
+test('allows placing the same ritual more than once, each at its own size, and clamps an out-of-range radius', async () => {
   const ritual = await request(app)
     .post('/api/rituals')
     .send({ name: 'Repeatable', purpose: 'Boon', primary: 'Aether', subs: [], effect: 'E' });
@@ -43,12 +43,14 @@ test('allows placing the same ritual more than once and clamps an out-of-range r
   expect(create.body.radius).toBe(10); // clamped to MAX_BOARD_RADIUS
 
   const placements = [
-    { id: 'p1', ritualId: ritual.body.id, q: 0, r: 0 },
-    { id: 'p2', ritualId: ritual.body.id, q: 5, r: -5 },
+    { id: 'p1', ritualId: ritual.body.id, q: 0, r: 0, size: 1 },
+    { id: 'p2', ritualId: ritual.body.id, q: 5, r: -5, size: 3 },
   ];
   const update = await request(app)
     .put('/api/arrays/' + create.body.id)
     .send({ placements });
   expect(update.status).toBe(200);
   expect(update.body.placements).toHaveLength(2);
+  expect(update.body.placements[0].size).toBe(1);
+  expect(update.body.placements[1].size).toBe(3);
 });
