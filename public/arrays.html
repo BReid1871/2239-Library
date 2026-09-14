@@ -11,23 +11,22 @@
 .array-card.selected { border-color: var(--accent); background: var(--bg); }
 .array-card-title { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .array-card-meta { font-size: 10px; color: var(--text3); margin-top: 1px; }
-.array-grid-wrap { flex: 1; overflow: auto; border: 0.5px solid var(--border2); border-radius: var(--radius); background: var(--bg2); position: relative; }
-.array-grid { display: inline-grid; gap: 3px; padding: 12px; min-width: 100%; }
-.array-cell { width: 120px; height: 80px; border: 0.5px dashed var(--border2); border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.1s; position: relative; background: var(--bg); }
-.array-cell:hover { border-color: var(--accent); border-style: solid; }
-.array-cell.has-ritual { border-style: solid; border-color: var(--border2); background: var(--bg); cursor: default; }
-.array-cell.has-ritual:hover { border-color: var(--accent); }
-.array-cell-empty-icon { font-size: 18px; color: var(--text3); line-height: 1; }
-.array-cell-content { width: 100%; height: 100%; padding: 5px 6px; display: flex; flex-direction: column; justify-content: space-between; }
-.array-cell-name { font-size: 10px; font-weight: 500; color: var(--text); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.array-cell-runes { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 3px; }
-.array-cell-dot { width: 6px; height: 6px; border-radius: 50%; border: 0.5px solid rgba(128,128,128,0.2); flex-shrink: 0; }
-.array-cell-actions { display: flex; gap: 3px; margin-top: 3px; }
-.array-cell-btn { font-size: 9px; padding: 1px 5px; border-radius: 4px; border: 0.5px solid var(--border2); background: transparent; color: var(--text3); cursor: pointer; transition: all 0.1s; }
-.array-cell-btn:hover { color: var(--text); background: var(--bg2); }
-.array-cell-btn.remove { color: #dc2626; border-color: rgba(220,38,38,0.28); }
-.array-cell-btn.remove:hover { background: rgba(220,38,38,0.07); }
-.array-picker { position: fixed; background: var(--bg); border: 0.5px solid var(--border2); border-radius: var(--radius-lg); box-shadow: 0 8px 24px rgba(0,0,0,0.18); z-index: 999; width: 240px; max-height: 340px; display: flex; flex-direction: column; }
+.hex-board-wrap { flex: 1; overflow: auto; border: 0.5px solid var(--border2); border-radius: var(--radius); background: var(--bg2); position: relative; min-width: 0; }
+.hex-cell { fill: var(--bg); stroke: var(--border2); stroke-width: 1; cursor: pointer; transition: fill 0.1s, stroke 0.1s; }
+.hex-cell:hover { stroke: var(--accent); }
+.hex-cell.occupied { cursor: default; }
+.hex-reach-line { stroke: var(--accent); stroke-width: 1.5; opacity: 0.45; pointer-events: none; }
+.hex-order-badge circle { fill: var(--accent); stroke: var(--bg2); stroke-width: 1.5; }
+.hex-order-badge text { fill: #fff; font-size: 9px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+.placement-list { width: 210px; flex-shrink: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.placement-item { display: flex; align-items: flex-start; gap: 6px; padding: 7px 9px; border-radius: var(--radius); background: var(--bg2); border: 0.5px solid var(--border); }
+.placement-item-body { flex: 1; min-width: 0; }
+.placement-item-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.placement-item-meta { font-size: 10px; color: var(--text3); margin-top: 1px; }
+.placement-item-actions { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
+.placement-item-actions button { font-size: 10px; padding: 1px 7px; }
+.placement-empty { font-size: 11px; color: var(--text3); text-align: center; padding: 1rem 0.5rem; }
+.array-picker { position: fixed; background: var(--bg); border: 0.5px solid var(--border2); border-radius: var(--radius-lg); box-shadow: 0 8px 24px rgba(0,0,0,0.18); z-index: 999; width: 240px; max-height: 380px; display: flex; flex-direction: column; }
 .array-picker-search { padding: 8px 10px; border-bottom: 0.5px solid var(--border); }
 .array-picker-search input { width: 100%; padding: 5px 8px; font-size: 12px; border: 0.5px solid var(--border2); border-radius: 5px; background: var(--bg2); color: var(--text); outline: none; }
 .array-picker-list { flex: 1; overflow-y: auto; padding: 6px; }
@@ -36,6 +35,7 @@
 .array-picker-item-name { flex: 1; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .array-picker-item-meta { font-size: 10px; color: var(--text3); }
 .array-picker-empty { font-size: 12px; color: var(--text3); text-align: center; padding: 1rem; }
+.array-picker-error { font-size: 11px; color: #dc2626; text-align: center; padding: 0 10px 8px; }
 .array-picker-cancel { padding: 6px; border-top: 0.5px solid var(--border); text-align: center; }
 .array-picker-cancel button { font-size: 11px; }
 .array-grid-controls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
@@ -69,6 +69,7 @@
 </div>
 
 <script src="reference-data.js"></script>
+<script src="hex.js"></script>
 <script src="shared.js"></script>
 <script>
 renderNav('nav', 'arrays', [], function() {});
@@ -111,6 +112,7 @@ function openRitualPreview(id) {
   html += '<div>';
   html += '<span class="badge" style="background:' + tc + '22;color:' + tc + ';border:0.5px solid ' + tc + '44">' + r.tier + '</span>';
   html += '<span class="badge" style="background:var(--bg2);color:var(--text2);border:0.5px solid var(--border)">' + esc(r.purpose) + '</span>';
+  html += '<span class="badge" style="background:var(--bg2);color:var(--text2);border:0.5px solid var(--border)">Size ' + (r.size || 1) + ' · Range ' + Hex.rangeForSize(r.size || 1) + '</span>';
   html += '</div></div>';
   html += '<button id="ritual-preview-close">Close</button>';
   html += '</div>';
@@ -137,6 +139,7 @@ function closeRitualPreview() {
 // ── Arrays ───────────────────────────────────────────────────────────────────
 
 var currentArrayId = null;
+var HEX_PIXEL_SIZE = 26;
 
 function getArray(id) {
   for (var i = 0; i < arrays.length; i++) { if (arrays[i].id === id) return arrays[i]; }
@@ -144,14 +147,14 @@ function getArray(id) {
 }
 
 function saveArray(arr) {
-  api('PUT', '/api/arrays/' + arr.id, { name: arr.name, rows: arr.rows, cols: arr.cols, cells: arr.cells })
+  api('PUT', '/api/arrays/' + arr.id, { name: arr.name, radius: arr.radius, placements: arr.placements })
     .catch(function(e) { console.error('Failed to save array', e); });
 }
 
 var saveArrayDebounced = debounce(saveArray, 400);
 
 async function newArray() {
-  var created = await api('POST', '/api/arrays', { name: 'Untitled Array', rows: 4, cols: 4, cells: {} });
+  var created = await api('POST', '/api/arrays', { name: 'Untitled Array', radius: 3, placements: [] });
   await loadArrays();
   renderArrayList();
   openArray(created.id);
@@ -181,9 +184,9 @@ function renderArrayList() {
     var card = document.createElement('div');
     card.className = 'array-card' + (arr.id === currentArrayId ? ' selected' : '');
     var title = document.createElement('div'); title.className = 'array-card-title'; title.textContent = arr.name;
-    var ritualCount = Object.keys(arr.cells).length;
+    var count = (arr.placements || []).length;
     var meta = document.createElement('div'); meta.className = 'array-card-meta';
-    meta.textContent = arr.rows + '×' + arr.cols + ' · ' + ritualCount + ' ritual' + (ritualCount !== 1 ? 's' : '');
+    meta.textContent = 'Radius ' + arr.radius + ' · ' + count + ' ritual' + (count !== 1 ? 's' : '');
     card.appendChild(title); card.appendChild(meta);
     card.onclick = function() { openArray(arr.id); };
     el.appendChild(card);
@@ -198,11 +201,180 @@ function openArray(id) {
   renderArrayEditor(arr);
 }
 
+// ── Hex board helpers ────────────────────────────────────────────────────────
+
+// Placements whose ritual still exists, each with its footprint hexes and
+// range — a ritual can be deleted from the library after being placed, and
+// (matching how deleted rituals were already handled before this feature)
+// a placement pointing at a missing ritual is simply skipped everywhere.
+function livePlacements(arr) {
+  var out = [];
+  (arr.placements || []).forEach(function(p) {
+    var ritual = getRitualById(p.ritualId);
+    if (!ritual) return;
+    var size = ritual.size || 1;
+    out.push({
+      placement: p,
+      ritual: ritual,
+      anchor: { q: p.q, r: p.r },
+      footprint: Hex.footprintHexes({ q: p.q, r: p.r }, size),
+      range: Hex.rangeForSize(size),
+    });
+  });
+  return out;
+}
+
+function occupiedHexMap(placements) {
+  var map = {};
+  placements.forEach(function(entry) {
+    entry.footprint.forEach(function(hex) {
+      map[Hex.keyOf(hex)] = entry;
+    });
+  });
+  return map;
+}
+
+// Every directed "reach": ritual A's effect touches ritual B's anchor
+// within A's range. Sorted closest-first — that ranking IS the order
+// effects occur in, which is what the numbered overlay shows.
+function computeReaches(placements) {
+  var reaches = [];
+  placements.forEach(function(a) {
+    placements.forEach(function(b) {
+      if (a === b) return;
+      var dist = Hex.hexDistance(a.anchor, b.anchor);
+      if (dist <= a.range) reaches.push({ from: a, to: b, distance: dist });
+    });
+  });
+  reaches.sort(function(x, y) {
+    if (x.distance !== y.distance) return x.distance - y.distance;
+    var xk = x.from.placement.id + '>' + x.to.placement.id;
+    var yk = y.from.placement.id + '>' + y.to.placement.id;
+    return xk < yk ? -1 : xk > yk ? 1 : 0;
+  });
+  reaches.forEach(function(reach, i) { reach.order = i + 1; });
+  return reaches;
+}
+
+function svgEl(tag, attrs) {
+  var el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  Object.keys(attrs || {}).forEach(function(k) { el.setAttribute(k, attrs[k]); });
+  return el;
+}
+
+function renderHexBoard(arr, placements) {
+  var boardHexes = Hex.hexDisk({ q: 0, r: 0 }, arr.radius);
+  var occupied = occupiedHexMap(placements);
+
+  var pts = boardHexes.map(function(h) { return { hex: h, px: Hex.axialToPixel(h, HEX_PIXEL_SIZE) }; });
+  var xs = pts.map(function(p) { return p.px.x; });
+  var ys = pts.map(function(p) { return p.px.y; });
+  var pad = HEX_PIXEL_SIZE + 8;
+  var minX = Math.min.apply(null, xs) - pad, maxX = Math.max.apply(null, xs) + pad;
+  var minY = Math.min.apply(null, ys) - pad, maxY = Math.max.apply(null, ys) + pad;
+  var width = maxX - minX, height = maxY - minY;
+
+  var svg = svgEl('svg', { width: width, height: height, viewBox: '0 0 ' + width + ' ' + height });
+
+  pts.forEach(function(p) {
+    var cx = p.px.x - minX, cy = p.px.y - minY;
+    var entry = occupied[Hex.keyOf(p.hex)];
+    var isAnchor = entry && entry.anchor.q === p.hex.q && entry.anchor.r === p.hex.r;
+    var poly = svgEl('polygon', {
+      points: Hex.hexCornersSvgPoints(cx, cy, HEX_PIXEL_SIZE - 1.5),
+      class: 'hex-cell' + (entry ? ' occupied' : ''),
+      'data-q': p.hex.q,
+      'data-r': p.hex.r,
+    });
+    if (entry) {
+      var rune = getRune(entry.ritual.primary);
+      // Inline style, not setAttribute('fill', …) — the .hex-cell class's
+      // CSS `fill` would otherwise win over a presentation attribute.
+      poly.style.fill = rune ? rune.color : '#999';
+      poly.style.fillOpacity = isAnchor ? '0.85' : '0.35';
+      var title = svgEl('title', {});
+      title.textContent = entry.ritual.name + (isAnchor ? ' (size ' + (entry.ritual.size || 1) + ')' : '');
+      poly.appendChild(title);
+    } else {
+      poly.onclick = function() { openRitualPicker(arr, p.hex); };
+    }
+    svg.appendChild(poly);
+  });
+
+  var reaches = computeReaches(placements);
+  reaches.forEach(function(reach) {
+    var fromPx = Hex.axialToPixel(reach.from.anchor, HEX_PIXEL_SIZE);
+    var toPx = Hex.axialToPixel(reach.to.anchor, HEX_PIXEL_SIZE);
+    var x1 = fromPx.x - minX, y1 = fromPx.y - minY, x2 = toPx.x - minX, y2 = toPx.y - minY;
+    var line = svgEl('line', { x1: x1, y1: y1, x2: x2, y2: y2, class: 'hex-reach-line' });
+    svg.appendChild(line);
+  });
+  reaches.forEach(function(reach) {
+    var fromPx = Hex.axialToPixel(reach.from.anchor, HEX_PIXEL_SIZE);
+    var toPx = Hex.axialToPixel(reach.to.anchor, HEX_PIXEL_SIZE);
+    var mx = (fromPx.x + toPx.x) / 2 - minX, my = (fromPx.y + toPx.y) / 2 - minY;
+    var g = svgEl('g', { class: 'hex-order-badge' });
+    g.appendChild(svgEl('circle', { cx: mx, cy: my, r: 7.5 }));
+    var text = svgEl('text', { x: mx, y: my });
+    text.textContent = reach.order;
+    g.appendChild(text);
+    var title = svgEl('title', {});
+    title.textContent = reach.order + '. ' + reach.from.ritual.name + ' → ' + reach.to.ritual.name + ' (distance ' + reach.distance + ')';
+    g.appendChild(title);
+    svg.appendChild(g);
+  });
+
+  return svg;
+}
+
+function renderPlacementList(arr, placements) {
+  var wrap = document.createElement('div');
+  wrap.className = 'placement-list';
+  if (placements.length === 0) {
+    var empty = document.createElement('div');
+    empty.className = 'placement-empty';
+    empty.textContent = 'No rituals placed yet. Click a hex to add one.';
+    wrap.appendChild(empty);
+    return wrap;
+  }
+  placements.forEach(function(entry) {
+    var item = document.createElement('div');
+    item.className = 'placement-item';
+
+    var body = document.createElement('div');
+    body.className = 'placement-item-body';
+    var name = document.createElement('div'); name.className = 'placement-item-name'; name.textContent = entry.ritual.name;
+    var meta = document.createElement('div'); meta.className = 'placement-item-meta';
+    meta.textContent = 'Size ' + (entry.ritual.size || 1) + ' · Range ' + entry.range;
+    body.appendChild(name); body.appendChild(meta);
+
+    var actions = document.createElement('div');
+    actions.className = 'placement-item-actions';
+    var viewBtn = document.createElement('button');
+    viewBtn.textContent = 'View';
+    viewBtn.onclick = function() { openRitualPreview(entry.ritual.id); };
+    var removeBtn = document.createElement('button');
+    removeBtn.className = 'danger';
+    removeBtn.textContent = 'Remove';
+    removeBtn.onclick = function() {
+      arr.placements = arr.placements.filter(function(p) { return p.id !== entry.placement.id; });
+      renderArrayEditor(arr);
+      renderArrayList();
+      saveArray(arr);
+    };
+    actions.appendChild(viewBtn); actions.appendChild(removeBtn);
+
+    item.appendChild(body); item.appendChild(actions);
+    wrap.appendChild(item);
+  });
+  return wrap;
+}
+
 function renderArrayEditor(arr) {
   var area = document.getElementById('array-editor-area');
   area.innerHTML = '';
 
-  // Top bar: name + controls
+  // Top bar: name + radius control
   var topBar = document.createElement('div');
   topBar.style.cssText = 'display:flex;align-items:center;gap:10px;flex-shrink:0;';
 
@@ -216,153 +388,69 @@ function renderArrayEditor(arr) {
     saveArrayDebounced(arr);
   };
 
-  // Grid size controls
-  var sizeLabel = document.createElement('span');
-  sizeLabel.style.cssText = 'font-size:11px;color:var(--text3);flex-shrink:0;';
-  sizeLabel.textContent = 'Grid:';
+  var radiusLabel = document.createElement('span');
+  radiusLabel.style.cssText = 'font-size:11px;color:var(--text3);flex-shrink:0;';
+  radiusLabel.textContent = 'Board radius:';
 
-  function makeSpinner(label, getValue, onChange) {
-    var wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;align-items:center;gap:3px;';
-    var lbl = document.createElement('span'); lbl.style.cssText = 'font-size:11px;color:var(--text3);'; lbl.textContent = label;
-    var dec = document.createElement('button'); dec.textContent = '−'; dec.style.cssText = 'padding:2px 6px;font-size:12px;';
-    var val = document.createElement('span'); val.style.cssText = 'font-size:12px;min-width:18px;text-align:center;'; val.textContent = getValue();
-    var inc = document.createElement('button'); inc.textContent = '+'; inc.style.cssText = 'padding:2px 6px;font-size:12px;';
-    dec.onclick = function() { onChange(-1); val.textContent = getValue(); };
-    inc.onclick = function() { onChange(1);  val.textContent = getValue(); };
-    wrap.appendChild(lbl); wrap.appendChild(dec); wrap.appendChild(val); wrap.appendChild(inc);
-    return wrap;
-  }
-
-  var rowSpinner = makeSpinner('Rows ', function(){ return arr.rows; }, function(d){
-    var n = Math.max(1, Math.min(12, arr.rows + d));
-    if (n < arr.rows) { // removing rows — clear cells in removed rows
-      for (var r = n; r < arr.rows; r++) for (var c = 0; c < arr.cols; c++) delete arr.cells[r+','+c];
-    }
-    arr.rows = n; renderArrayEditor(arr); renderArrayList(); saveArray(arr);
-  });
-
-  var colSpinner = makeSpinner('Cols ', function(){ return arr.cols; }, function(d){
-    var n = Math.max(1, Math.min(16, arr.cols + d));
-    if (n < arr.cols) {
-      for (var r = 0; r < arr.rows; r++) for (var c = n; c < arr.cols; c++) delete arr.cells[r+','+c];
-    }
-    arr.cols = n; renderArrayEditor(arr); renderArrayList(); saveArray(arr);
-  });
+  var dec = document.createElement('button'); dec.textContent = '−'; dec.style.cssText = 'padding:2px 6px;font-size:12px;';
+  var radiusVal = document.createElement('span'); radiusVal.style.cssText = 'font-size:12px;min-width:14px;text-align:center;'; radiusVal.textContent = arr.radius;
+  var inc = document.createElement('button'); inc.textContent = '+'; inc.style.cssText = 'padding:2px 6px;font-size:12px;';
+  dec.onclick = function() { changeRadius(arr, -1); };
+  inc.onclick = function() { changeRadius(arr, 1); };
 
   var delBtn = document.createElement('button');
   delBtn.className = 'danger';
   delBtn.textContent = 'Delete';
-  delBtn.style.cssText = 'font-size:11px;padding:3px 10px;flex-shrink:0;';
+  delBtn.style.cssText = 'font-size:11px;padding:3px 10px;flex-shrink:0;margin-left:auto;';
   delBtn.onclick = function() { deleteArray(arr.id); };
 
   topBar.appendChild(nameInput);
-  topBar.appendChild(sizeLabel);
-  topBar.appendChild(rowSpinner);
-  topBar.appendChild(colSpinner);
+  topBar.appendChild(radiusLabel);
+  topBar.appendChild(dec);
+  topBar.appendChild(radiusVal);
+  topBar.appendChild(inc);
   topBar.appendChild(delBtn);
 
-  // Grid
-  var gridWrap = document.createElement('div');
-  gridWrap.className = 'array-grid-wrap';
+  // Board + placement list, side by side. The numbered badges on the board
+  // show the order in which ritual effects reach each other — closest
+  // pairs (within the source ritual's range) resolve first.
+  var row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:10px;flex:1;min-height:0;';
 
-  var grid = document.createElement('div');
-  grid.className = 'array-grid';
-  grid.style.gridTemplateColumns = 'repeat(' + arr.cols + ', 120px)';
-  grid.style.gridTemplateRows = 'repeat(' + arr.rows + ', 80px)';
+  var placements = livePlacements(arr);
+  var boardWrap = document.createElement('div');
+  boardWrap.className = 'hex-board-wrap';
+  boardWrap.appendChild(renderHexBoard(arr, placements));
 
-  for (var r = 0; r < arr.rows; r++) {
-    for (var c = 0; c < arr.cols; c++) {
-      (function(row, col) {
-        var key = row + ',' + col;
-        var cell = document.createElement('div');
-        var ritualId = arr.cells[key];
-        var ritual = ritualId ? getRitualById(ritualId) : null;
+  row.appendChild(boardWrap);
+  row.appendChild(renderPlacementList(arr, placements));
 
-        if (ritual) {
-          cell.className = 'array-cell has-ritual';
-          var content = document.createElement('div');
-          content.className = 'array-cell-content';
-
-          var nameEl = document.createElement('div');
-          nameEl.className = 'array-cell-name';
-          nameEl.textContent = ritual.name;
-
-          var runesEl = document.createElement('div');
-          runesEl.className = 'array-cell-runes';
-          // primary dot
-          var pr = getRune(ritual.primary);
-          if (pr) {
-            var d = document.createElement('span');
-            d.className = 'array-cell-dot';
-            d.style.background = pr.color;
-            d.title = pr.name;
-            runesEl.appendChild(d);
-          }
-          // sub dots (up to 6 to avoid overflow)
-          var subs = (ritual.subs || []).slice(0, 6);
-          subs.forEach(function(s) {
-            var sr = getRune(s);
-            if (!sr) return;
-            var sd = document.createElement('span');
-            sd.className = 'array-cell-dot';
-            sd.style.background = sr.color;
-            sd.title = sr.name;
-            runesEl.appendChild(sd);
-          });
-          if ((ritual.subs||[]).length > 6) {
-            var more = document.createElement('span');
-            more.style.cssText = 'font-size:8px;color:var(--text3);';
-            more.textContent = '+' + ((ritual.subs||[]).length - 6);
-            runesEl.appendChild(more);
-          }
-
-          var actions = document.createElement('div');
-          actions.className = 'array-cell-actions';
-
-          var viewBtn = document.createElement('button');
-          viewBtn.className = 'array-cell-btn';
-          viewBtn.textContent = 'View';
-          viewBtn.onclick = function(e) { e.stopPropagation(); openRitualPreview(ritualId); };
-
-          var removeBtn = document.createElement('button');
-          removeBtn.className = 'array-cell-btn remove';
-          removeBtn.textContent = '✕';
-          removeBtn.onclick = function(e) {
-            e.stopPropagation();
-            delete arr.cells[key];
-            renderArrayEditor(arr);
-            renderArrayList();
-            saveArray(arr);
-          };
-
-          actions.appendChild(viewBtn);
-          actions.appendChild(removeBtn);
-          content.appendChild(nameEl);
-          content.appendChild(runesEl);
-          content.appendChild(actions);
-          cell.appendChild(content);
-
-        } else {
-          cell.className = 'array-cell';
-          var icon = document.createElement('div');
-          icon.className = 'array-cell-empty-icon';
-          icon.textContent = '+';
-          cell.appendChild(icon);
-          cell.onclick = function() { openRitualPicker(arr, row, col); };
-        }
-
-        grid.appendChild(cell);
-      })(r, c);
-    }
-  }
-
-  gridWrap.appendChild(grid);
   area.appendChild(topBar);
-  area.appendChild(gridWrap);
+  area.appendChild(row);
 }
 
-function openRitualPicker(arr, row, col) {
+function changeRadius(arr, delta) {
+  var n = Math.max(1, Math.min(Hex.MAX_BOARD_RADIUS, arr.radius + delta));
+  if (n === arr.radius) return;
+  arr.radius = n;
+  // Dropping the board smaller can strand placements whose footprint no
+  // longer fits — same "clear what no longer fits" behavior the old
+  // rows/cols spinners had.
+  if (delta < 0) {
+    arr.placements = arr.placements.filter(function(p) {
+      var ritual = getRitualById(p.ritualId);
+      var size = ritual ? (ritual.size || 1) : 1;
+      return Hex.footprintHexes({ q: p.q, r: p.r }, size).every(function(hex) {
+        return Hex.hexDistance({ q: 0, r: 0 }, hex) <= arr.radius;
+      });
+    });
+  }
+  renderArrayEditor(arr);
+  renderArrayList();
+  saveArray(arr);
+}
+
+function openRitualPicker(arr, hex) {
   closePicker();
   var picker = document.createElement('div');
   picker.className = 'array-picker';
@@ -377,6 +465,8 @@ function openRitualPicker(arr, row, col) {
 
   var list = document.createElement('div');
   list.className = 'array-picker-list';
+  var errorEl = document.createElement('div');
+  errorEl.className = 'array-picker-error';
 
   function renderPickerList(q) {
     list.innerHTML = '';
@@ -386,9 +476,8 @@ function openRitualPicker(arr, row, col) {
              r.primary.toLowerCase().indexOf(q) >= 0 ||
              r.purpose.toLowerCase().indexOf(q) >= 0;
     });
-    // exclude already placed rituals
-    var placed = Object.values(arr.cells);
-    filtered = filtered.filter(function(r) { return placed.indexOf(r.id) < 0; });
+    // Placing the same ritual more than once is allowed, so there's no
+    // "already placed" filter here.
     if (filtered.length === 0) {
       list.innerHTML = '<div class="array-picker-empty">No rituals found.</div>';
       return;
@@ -401,16 +490,9 @@ function openRitualPicker(arr, row, col) {
       dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:' + (pr?pr.color:'#ccc') + ';flex-shrink:0;border:0.5px solid rgba(128,128,128,0.2);';
       var nameEl = document.createElement('span'); nameEl.className = 'array-picker-item-name'; nameEl.textContent = r.name;
       var meta = document.createElement('span'); meta.className = 'array-picker-item-meta';
-      var tc = TIER_COLORS[r.tier]||'#999';
-      meta.innerHTML = '<span style="color:'+tc+';font-weight:500">'+r.tier+'</span>';
+      meta.textContent = 'Size ' + (r.size || 1);
       item.appendChild(dot); item.appendChild(nameEl); item.appendChild(meta);
-      item.onclick = function() {
-        arr.cells[row+','+col] = r.id;
-        closePicker();
-        renderArrayEditor(arr);
-        renderArrayList();
-        saveArray(arr);
-      };
+      item.onclick = function() { attemptPlacement(arr, hex, r); };
       list.appendChild(item);
     });
   }
@@ -427,6 +509,7 @@ function openRitualPicker(arr, row, col) {
 
   picker.appendChild(searchWrap);
   picker.appendChild(list);
+  picker.appendChild(errorEl);
   picker.appendChild(cancelWrap);
 
   document.body.appendChild(picker);
@@ -442,6 +525,33 @@ function openRitualPicker(arr, row, col) {
   setTimeout(function() {
     document.addEventListener('click', outsidePickerClick);
   }, 10);
+}
+
+// Places `ritual` anchored at `hex`, if its footprint fits the board and
+// doesn't overlap anything already placed there. Shows an inline error in
+// the picker instead of closing it if it doesn't fit.
+function attemptPlacement(arr, hex, ritual) {
+  var size = ritual.size || 1;
+  var footprint = Hex.footprintHexes(hex, size);
+  var withinBoard = footprint.every(function(h) { return Hex.hexDistance({ q: 0, r: 0 }, h) <= arr.radius; });
+  var occupied = occupiedHexMap(livePlacements(arr));
+  var overlaps = footprint.some(function(h) { return !!occupied[Hex.keyOf(h)]; });
+
+  var errorEl = document.querySelector('#ritual-picker .array-picker-error');
+  if (!withinBoard) {
+    if (errorEl) errorEl.textContent = '"' + ritual.name + '" (size ' + size + ') doesn’t fit within the board here — try a more central hex or a larger board.';
+    return;
+  }
+  if (overlaps) {
+    if (errorEl) errorEl.textContent = '"' + ritual.name + '" would overlap a ritual already placed here.';
+    return;
+  }
+
+  arr.placements.push({ id: crypto.randomUUID(), ritualId: ritual.id, q: hex.q, r: hex.r });
+  closePicker();
+  renderArrayEditor(arr);
+  renderArrayList();
+  saveArray(arr);
 }
 
 function outsidePickerClick(e) {

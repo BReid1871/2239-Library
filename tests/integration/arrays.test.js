@@ -10,25 +10,45 @@ beforeEach(async () => {
   app = createApp(pool);
 });
 
-test('creates an array with defaults, places a ritual in a cell, and deletes it', async () => {
+test('creates an array with defaults, places a ritual, and deletes it', async () => {
   const ritual = await request(app)
     .post('/api/rituals')
     .send({ name: 'Test Ritual', purpose: 'Boon', primary: 'Aether', subs: [], effect: 'E' });
 
   const create = await request(app).post('/api/arrays').send({});
   expect(create.status).toBe(201);
-  expect(create.body.rows).toBe(4);
-  expect(create.body.cols).toBe(4);
-  expect(create.body.cells).toEqual({});
+  expect(create.body.radius).toBe(3);
+  expect(create.body.placements).toEqual([]);
 
+  const placements = [{ id: 'p1', ritualId: ritual.body.id, q: 0, r: 0 }];
   const update = await request(app)
     .put('/api/arrays/' + create.body.id)
-    .send({ name: 'My Grid', rows: 4, cols: 4, cells: { '0,0': ritual.body.id } });
+    .send({ name: 'My Array', radius: 3, placements });
   expect(update.status).toBe(200);
-  expect(update.body.cells['0,0']).toBe(ritual.body.id);
+  expect(update.body.placements).toEqual(placements);
 
   const del = await request(app).delete('/api/arrays/' + create.body.id);
   expect(del.status).toBe(204);
   const list = await request(app).get('/api/arrays');
   expect(list.body).toHaveLength(0);
+});
+
+test('allows placing the same ritual more than once and clamps an out-of-range radius', async () => {
+  const ritual = await request(app)
+    .post('/api/rituals')
+    .send({ name: 'Repeatable', purpose: 'Boon', primary: 'Aether', subs: [], effect: 'E' });
+
+  const create = await request(app).post('/api/arrays').send({ radius: 999 });
+  expect(create.status).toBe(201);
+  expect(create.body.radius).toBe(10); // clamped to MAX_BOARD_RADIUS
+
+  const placements = [
+    { id: 'p1', ritualId: ritual.body.id, q: 0, r: 0 },
+    { id: 'p2', ritualId: ritual.body.id, q: 5, r: -5 },
+  ];
+  const update = await request(app)
+    .put('/api/arrays/' + create.body.id)
+    .send({ placements });
+  expect(update.status).toBe(200);
+  expect(update.body.placements).toHaveLength(2);
 });
