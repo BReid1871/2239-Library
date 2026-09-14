@@ -18,7 +18,7 @@
 body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
 
 /* Tabs / top nav */
-.tabs { display: flex; border-bottom: 0.5px solid var(--border); margin-bottom: 1.75rem; }
+.tabs { display: flex; border-bottom: 0.5px solid var(--border); margin-bottom: 1.75rem; position: sticky; top: 0; z-index: 20; background: var(--bg); }
 .tab { padding: 7px 15px; font-size: 13px; cursor: pointer; color: var(--text3); border-bottom: 2px solid transparent; margin-bottom: -0.5px; transition: all 0.1s; user-select: none; text-decoration: none; display: inline-block; }
 .tab:hover { color: var(--text); }
 .tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 500; }
@@ -69,5 +69,6 @@ button.danger:hover:not(:disabled) { background: rgba(220,38,38,0.07); }
 .notes-empty { font-size: 13px; color: var(--text3); padding: 2rem 0; text-align: center; }
 
 /* Standalone page layout (notes.html, arrays.html) — index.html uses its own
-   three-column .app layout instead. */
-.page-wrap { max-width: 1100px; margin: 0 auto; padding: 2rem 1.75rem 4rem; }
+   three-column .app layout instead. Full page width, matching how much
+   space the equivalent tab occupied inside index.html's main column. */
+.page-wrap { padding: 2rem 1.75rem 4rem; }
