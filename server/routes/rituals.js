@@ -9,7 +9,7 @@ function rowToRitual(row) {
     name: row.name,
     purpose: row.purpose,
     primary: row.primary_rune,
-    subs: JSON.parse(row.subs),
+    subs: row.subs,
     tier: row.tier,
     effect: row.effect,
     createdAt: row.created_at,
@@ -19,12 +19,12 @@ function rowToRitual(row) {
 function ritualsRouter(db) {
   const router = express.Router();
 
-  router.get('/', (req, res) => {
-    const rows = db.prepare('SELECT * FROM rituals ORDER BY created_at DESC').all();
+  router.get('/', async (req, res) => {
+    const [rows] = await db.query('SELECT * FROM rituals ORDER BY created_at DESC');
     res.json(rows.map(rowToRitual));
   });
 
-  router.post('/', (req, res) => {
+  router.post('/', async (req, res) => {
     const { name, purpose, primary, subs, effect } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Please enter a ritual name.' });
     if (!purpose) return res.status(400).json({ error: 'Please select a purpose.' });
@@ -32,7 +32,8 @@ function ritualsRouter(db) {
     if (!effect || !String(effect).trim()) return res.status(400).json({ error: 'Please describe the effect.' });
 
     const candidate = { purpose, primary, subs: subs || [] };
-    const existing = db.prepare('SELECT * FROM rituals').all().map(rowToRitual);
+    const [existingRows] = await db.query('SELECT * FROM rituals');
+    const existing = existingRows.map(rowToRitual);
     const dupe = existing.find((r) => ritualsMatch(r, candidate));
     if (dupe) {
       return res.status(409).json({ error: `Duplicate: "${dupe.name}" already uses this purpose + rune combination.` });
@@ -43,20 +44,21 @@ function ritualsRouter(db) {
       name: String(name).trim(),
       purpose,
       primary_rune: primary,
-      subs: JSON.stringify(subs || []),
+      subs: subs || [],
       tier: getTier((subs || []).length),
       effect: String(effect).trim(),
       created_at: new Date().toISOString(),
     };
-    db.prepare(
-      'INSERT INTO rituals (id, name, purpose, primary_rune, subs, tier, effect, created_at) VALUES (@id, @name, @purpose, @primary_rune, @subs, @tier, @effect, @created_at)'
-    ).run(row);
+    await db.query(
+      'INSERT INTO rituals (id, name, purpose, primary_rune, subs, tier, effect, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [row.id, row.name, row.purpose, row.primary_rune, JSON.stringify(row.subs), row.tier, row.effect, row.created_at]
+    );
     res.status(201).json(rowToRitual(row));
   });
 
-  router.put('/:id', (req, res) => {
-    const existingRow = db.prepare('SELECT * FROM rituals WHERE id = ?').get(req.params.id);
-    if (!existingRow) return res.status(404).json({ error: 'Ritual not found.' });
+  router.put('/:id', async (req, res) => {
+    const [existingRows] = await db.query('SELECT * FROM rituals WHERE id = ?', [req.params.id]);
+    if (existingRows.length === 0) return res.status(404).json({ error: 'Ritual not found.' });
 
     const { name, purpose, primary, subs, effect } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Please enter a ritual name.' });
@@ -65,29 +67,32 @@ function ritualsRouter(db) {
     if (!effect || !String(effect).trim()) return res.status(400).json({ error: 'Please describe the effect.' });
 
     const candidate = { purpose, primary, subs: subs || [] };
-    const others = db.prepare('SELECT * FROM rituals WHERE id != ?').all(req.params.id).map(rowToRitual);
+    const [otherRows] = await db.query('SELECT * FROM rituals WHERE id != ?', [req.params.id]);
+    const others = otherRows.map(rowToRitual);
     const dupe = others.find((r) => ritualsMatch(r, candidate));
     if (dupe) {
       return res.status(409).json({ error: `Duplicate: "${dupe.name}" already uses this purpose + rune combination.` });
     }
 
-    db.prepare(
-      'UPDATE rituals SET name=@name, purpose=@purpose, primary_rune=@primary_rune, subs=@subs, tier=@tier, effect=@effect WHERE id=@id'
-    ).run({
-      id: req.params.id,
-      name: String(name).trim(),
-      purpose,
-      primary_rune: primary,
-      subs: JSON.stringify(subs || []),
-      tier: getTier((subs || []).length),
-      effect: String(effect).trim(),
-    });
-    res.json(rowToRitual(db.prepare('SELECT * FROM rituals WHERE id = ?').get(req.params.id)));
+    await db.query(
+      'UPDATE rituals SET name=?, purpose=?, primary_rune=?, subs=?, tier=?, effect=? WHERE id=?',
+      [
+        String(name).trim(),
+        purpose,
+        primary,
+        JSON.stringify(subs || []),
+        getTier((subs || []).length),
+        String(effect).trim(),
+        req.params.id,
+      ]
+    );
+    const [updatedRows] = await db.query('SELECT * FROM rituals WHERE id = ?', [req.params.id]);
+    res.json(rowToRitual(updatedRows[0]));
   });
 
-  router.delete('/:id', (req, res) => {
-    const result = db.prepare('DELETE FROM rituals WHERE id = ?').run(req.params.id);
-    if (result.changes === 0) return res.status(404).json({ error: 'Ritual not found.' });
+  router.delete('/:id', async (req, res) => {
+    const [result] = await db.query('DELETE FROM rituals WHERE id = ?', [req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Ritual not found.' });
     res.status(204).end();
   });
 

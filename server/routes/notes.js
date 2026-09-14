@@ -4,11 +4,12 @@ const crypto = require('crypto');
 function notesRouter(db) {
   const router = express.Router();
 
-  router.get('/', (req, res) => {
-    res.json(db.prepare('SELECT * FROM notes ORDER BY created_at DESC').all());
+  router.get('/', async (req, res) => {
+    const [rows] = await db.query('SELECT * FROM notes ORDER BY created_at DESC');
+    res.json(rows);
   });
 
-  router.post('/', (req, res) => {
+  router.post('/', async (req, res) => {
     const now = new Date().toISOString();
     const row = {
       id: crypto.randomUUID(),
@@ -17,25 +18,31 @@ function notesRouter(db) {
       created_at: now,
       updated_at: now,
     };
-    db.prepare(
-      'INSERT INTO notes (id, title, body, created_at, updated_at) VALUES (@id, @title, @body, @created_at, @updated_at)'
-    ).run(row);
+    await db.query('INSERT INTO notes (id, title, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', [
+      row.id,
+      row.title,
+      row.body,
+      row.created_at,
+      row.updated_at,
+    ]);
     res.status(201).json(row);
   });
 
-  router.put('/:id', (req, res) => {
-    const existing = db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id);
-    if (!existing) return res.status(404).json({ error: 'Note not found.' });
+  router.put('/:id', async (req, res) => {
+    const [existingRows] = await db.query('SELECT * FROM notes WHERE id = ?', [req.params.id]);
+    if (existingRows.length === 0) return res.status(404).json({ error: 'Note not found.' });
+    const existing = existingRows[0];
     const title = req.body && req.body.title !== undefined ? req.body.title : existing.title;
     const body = req.body && req.body.body !== undefined ? req.body.body : existing.body;
     const updated_at = new Date().toISOString();
-    db.prepare('UPDATE notes SET title=?, body=?, updated_at=? WHERE id=?').run(title, body, updated_at, req.params.id);
-    res.json(db.prepare('SELECT * FROM notes WHERE id = ?').get(req.params.id));
+    await db.query('UPDATE notes SET title=?, body=?, updated_at=? WHERE id=?', [title, body, updated_at, req.params.id]);
+    const [updatedRows] = await db.query('SELECT * FROM notes WHERE id = ?', [req.params.id]);
+    res.json(updatedRows[0]);
   });
 
-  router.delete('/:id', (req, res) => {
-    const result = db.prepare('DELETE FROM notes WHERE id = ?').run(req.params.id);
-    if (result.changes === 0) return res.status(404).json({ error: 'Note not found.' });
+  router.delete('/:id', async (req, res) => {
+    const [result] = await db.query('DELETE FROM notes WHERE id = ?', [req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: 'Note not found.' });
     res.status(204).end();
   });
 

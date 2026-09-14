@@ -1,20 +1,13 @@
-import os from 'os';
-import path from 'path';
-import fs from 'fs';
 import request from 'supertest';
-import { test, expect, beforeEach, afterEach } from 'vitest';
+import { test, expect, beforeEach } from 'vitest';
 
 let app;
 
 beforeEach(async () => {
-  const dbPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'library-db-')), 'test.db');
-  process.env.LIBRARY_DB_PATH = dbPath;
+  const { pool, resetDb } = await import('../helpers/testDb.js');
+  await resetDb();
   const { createApp } = await import('../../server/index.js');
-  app = createApp();
-});
-
-afterEach(() => {
-  delete process.env.LIBRARY_DB_PATH;
+  app = createApp(pool);
 });
 
 test('creates, updates, and deletes a note', async () => {

@@ -1,22 +1,21 @@
 const path = require('path');
 const express = require('express');
-const { openDb } = require('./db');
+const { openDb, initSchema } = require('./db');
 const { ritualsRouter } = require('./routes/rituals');
 const { notesRouter } = require('./routes/notes');
 const { componentsRouter } = require('./routes/components');
 const { arraysRouter } = require('./routes/arrays');
 const { dataRouter } = require('./routes/data');
 
-function createApp() {
+function createApp(db) {
   const app = express();
-  const db = openDb();
 
   app.use(express.json());
   app.use(express.static(path.join(__dirname, '..', 'public')));
 
-  app.get('/api/health', (req, res) => {
-    const row = db.prepare('SELECT 1 AS ok').get();
-    res.json({ ok: row.ok === 1 });
+  app.get('/api/health', async (req, res) => {
+    const [rows] = await db.query('SELECT 1 AS ok');
+    res.json({ ok: rows[0].ok === 1 });
   });
 
   app.use('/api/rituals', ritualsRouter(db));
@@ -28,11 +27,20 @@ function createApp() {
   return app;
 }
 
-if (require.main === module) {
-  const app = createApp();
+async function start() {
+  const db = openDb();
+  await initSchema(db);
+  const app = createApp(db);
   const port = process.env.PORT || 3000;
   app.listen(port, () => {
     console.log(`2239-library listening on port ${port}`);
+  });
+}
+
+if (require.main === module) {
+  start().catch((err) => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
   });
 }
 

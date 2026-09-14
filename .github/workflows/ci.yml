@@ -31,6 +31,25 @@ jobs:
 
   integration:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_DATABASE: library_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      MYSQLHOST: 127.0.0.1
+      MYSQLPORT: 3306
+      MYSQLUSER: root
+      MYSQLPASSWORD: ''
+      MYSQLDATABASE: library_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -42,6 +61,25 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_DATABASE: library_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      MYSQLHOST: 127.0.0.1
+      MYSQLPORT: 3306
+      MYSQLUSER: root
+      MYSQLPASSWORD: ''
+      MYSQLDATABASE: library_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
