@@ -16,9 +16,10 @@ final review.
 2. The agent explores, drafts a plan, and gets it approved before writing
    any code. The plan should call out the change's non-functional
    implications, not just functional ones.
-3. The agent implements the change and opens a PR (using
-   `.github/pull_request_template.md`), filling in the template's
-   Non-functional considerations section.
+3. The agent implements the change and opens a PR using the format in
+   `.github/pull_request_template.md` — Summary, Non-functional
+   considerations, Test plan — filling in every section. Never skip the
+   template.
 4. `.github/workflows/ci.yml` runs four checks on the PR: `lint`, `unit`,
    `integration`, `e2e`.
 5. A Claude Code session subscribes to the PR's activity and watches CI.
