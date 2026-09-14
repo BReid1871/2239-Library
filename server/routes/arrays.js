@@ -1,17 +1,31 @@
 const express = require('express');
 const crypto = require('crypto');
+const { MAX_BOARD_RADIUS } = require('../../public/hex');
 const { asyncHandler } = require('../lib/asyncHandler');
 
 function rowToArray(row) {
   return {
     id: row.id,
     name: row.name,
-    rows: row.rows,
-    cols: row.cols,
-    cells: row.cells,
+    radius: row.radius,
+    placements: row.placements,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+// Radius is a board-size guard rail (see rituals.js's parseSize for the
+// same idea on ritual size); placements are trusted as shaped by the
+// client the same way `cells` was before — the editor is responsible for
+// valid hex coordinates and non-overlapping footprints.
+function parseRadius(value, fallback) {
+  const n = parseInt(value, 10);
+  if (!Number.isInteger(n)) return fallback;
+  return Math.min(Math.max(n, 1), MAX_BOARD_RADIUS);
+}
+
+function parsePlacements(value, fallback) {
+  return Array.isArray(value) ? value : fallback;
 }
 
 function arraysRouter(db) {
@@ -28,18 +42,16 @@ function arraysRouter(db) {
     const row = {
       id: crypto.randomUUID(),
       name: body.name || 'Untitled Array',
-      rows: Number.isInteger(body.rows) ? body.rows : 4,
-      cols: Number.isInteger(body.cols) ? body.cols : 4,
-      cells: body.cells || {},
+      radius: parseRadius(body.radius, 3),
+      placements: parsePlacements(body.placements, []),
       created_at: now,
       updated_at: now,
     };
-    await db.query('INSERT INTO arrays (id, name, `rows`, cols, cells, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [
+    await db.query('INSERT INTO arrays (id, name, radius, placements, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [
       row.id,
       row.name,
-      row.rows,
-      row.cols,
-      JSON.stringify(row.cells),
+      row.radius,
+      JSON.stringify(row.placements),
       row.created_at,
       row.updated_at,
     ]);
@@ -53,16 +65,14 @@ function arraysRouter(db) {
 
     const body = req.body || {};
     const name = body.name !== undefined ? body.name : existing.name;
-    const rows = Number.isInteger(body.rows) ? body.rows : existing.rows;
-    const cols = Number.isInteger(body.cols) ? body.cols : existing.cols;
-    const cells = body.cells !== undefined ? body.cells : existing.cells;
+    const radius = parseRadius(body.radius, existing.radius);
+    const placements = parsePlacements(body.placements, existing.placements);
     const updated_at = new Date().toISOString();
 
-    await db.query('UPDATE arrays SET name=?, `rows`=?, cols=?, cells=?, updated_at=? WHERE id=?', [
+    await db.query('UPDATE arrays SET name=?, radius=?, placements=?, updated_at=? WHERE id=?', [
       name,
-      rows,
-      cols,
-      JSON.stringify(cells),
+      radius,
+      JSON.stringify(placements),
       updated_at,
       req.params.id,
     ]);

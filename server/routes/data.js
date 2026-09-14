@@ -1,9 +1,10 @@
 const express = require('express');
 const crypto = require('crypto');
-const { rowToRitual } = require('./rituals');
+const { rowToRitual, parseSize } = require('./rituals');
 const { rowToArray } = require('./arrays');
 const { ritualsMatch } = require('../lib/rituals');
 const { getTier } = require('../../public/reference-data');
+const { MAX_BOARD_RADIUS } = require('../../public/hex');
 const { asyncHandler } = require('../lib/asyncHandler');
 
 function dataRouter(db) {
@@ -44,11 +45,12 @@ function dataRouter(db) {
         subs,
         tier: r.tier || getTier(subs.length),
         effect: r.effect,
+        size: parseSize(r.size),
         created_at: r.createdAt || new Date().toISOString(),
       };
       await db.query(
-        'INSERT INTO rituals (id, name, purpose, primary_rune, subs, tier, effect, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [row.id, row.name, row.purpose, row.primary_rune, JSON.stringify(row.subs), row.tier, row.effect, row.created_at]
+        'INSERT INTO rituals (id, name, purpose, primary_rune, subs, tier, effect, size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [row.id, row.name, row.purpose, row.primary_rune, JSON.stringify(row.subs), row.tier, row.effect, row.size, row.created_at]
       );
       currentRituals.push(rowToRitual(row));
       addedR++;
@@ -79,12 +81,12 @@ function dataRouter(db) {
       const id = a.id || crypto.randomUUID();
       if (existingArrayIds.has(id)) continue;
       const now = new Date().toISOString();
-      await db.query('INSERT INTO arrays (id, name, `rows`, cols, cells, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [
+      const radius = Number.isInteger(a.radius) ? Math.min(Math.max(a.radius, 1), MAX_BOARD_RADIUS) : 3;
+      await db.query('INSERT INTO arrays (id, name, radius, placements, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [
         id,
         a.name || 'Untitled Array',
-        Number.isInteger(a.rows) ? a.rows : 4,
-        Number.isInteger(a.cols) ? a.cols : 4,
-        JSON.stringify(a.cells || {}),
+        radius,
+        JSON.stringify(Array.isArray(a.placements) ? a.placements : []),
         a.createdAt || now,
         a.updatedAt || now,
       ]);

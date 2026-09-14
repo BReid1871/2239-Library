@@ -83,6 +83,9 @@ they default to `library_test` on localhost if no env vars are set.
 - `public/reference-data.js` — static app config (runes, tier rules,
   built-in components) shared between server and browser — not user data,
   so it isn't in the DB.
+- `public/hex.js` — hex-grid math (axial coordinates, distance, footprint,
+  pixel layout) shared between `arrays.html`'s hex board and both server
+  routes (ritual/board size limits) and its own unit tests.
 - `tests/helpers/testDb.js` — the shared MySQL pool integration tests use,
   reset with `TRUNCATE` in each test's `beforeEach` (see
   `vitest.config.js`'s `fileParallelism: false` — test files run
