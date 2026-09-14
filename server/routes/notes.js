@@ -1,15 +1,16 @@
 const express = require('express');
 const crypto = require('crypto');
+const { asyncHandler } = require('../lib/asyncHandler');
 
 function notesRouter(db) {
   const router = express.Router();
 
-  router.get('/', async (req, res) => {
+  router.get('/', asyncHandler(async (req, res) => {
     const [rows] = await db.query('SELECT * FROM notes ORDER BY created_at DESC');
     res.json(rows);
-  });
+  }));
 
-  router.post('/', async (req, res) => {
+  router.post('/', asyncHandler(async (req, res) => {
     const now = new Date().toISOString();
     const row = {
       id: crypto.randomUUID(),
@@ -26,9 +27,9 @@ function notesRouter(db) {
       row.updated_at,
     ]);
     res.status(201).json(row);
-  });
+  }));
 
-  router.put('/:id', async (req, res) => {
+  router.put('/:id', asyncHandler(async (req, res) => {
     const [existingRows] = await db.query('SELECT * FROM notes WHERE id = ?', [req.params.id]);
     if (existingRows.length === 0) return res.status(404).json({ error: 'Note not found.' });
     const existing = existingRows[0];
@@ -38,13 +39,13 @@ function notesRouter(db) {
     await db.query('UPDATE notes SET title=?, body=?, updated_at=? WHERE id=?', [title, body, updated_at, req.params.id]);
     const [updatedRows] = await db.query('SELECT * FROM notes WHERE id = ?', [req.params.id]);
     res.json(updatedRows[0]);
-  });
+  }));
 
-  router.delete('/:id', async (req, res) => {
+  router.delete('/:id', asyncHandler(async (req, res) => {
     const [result] = await db.query('DELETE FROM notes WHERE id = ?', [req.params.id]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Note not found.' });
     res.status(204).end();
-  });
+  }));
 
   return router;
 }

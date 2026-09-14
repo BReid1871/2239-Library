@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { getTier } = require('../../public/reference-data');
 const { ritualsMatch } = require('../lib/rituals');
+const { asyncHandler } = require('../lib/asyncHandler');
 
 function rowToRitual(row) {
   return {
@@ -19,12 +20,12 @@ function rowToRitual(row) {
 function ritualsRouter(db) {
   const router = express.Router();
 
-  router.get('/', async (req, res) => {
+  router.get('/', asyncHandler(async (req, res) => {
     const [rows] = await db.query('SELECT * FROM rituals ORDER BY created_at DESC');
     res.json(rows.map(rowToRitual));
-  });
+  }));
 
-  router.post('/', async (req, res) => {
+  router.post('/', asyncHandler(async (req, res) => {
     const { name, purpose, primary, subs, effect } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Please enter a ritual name.' });
     if (!purpose) return res.status(400).json({ error: 'Please select a purpose.' });
@@ -54,9 +55,9 @@ function ritualsRouter(db) {
       [row.id, row.name, row.purpose, row.primary_rune, JSON.stringify(row.subs), row.tier, row.effect, row.created_at]
     );
     res.status(201).json(rowToRitual(row));
-  });
+  }));
 
-  router.put('/:id', async (req, res) => {
+  router.put('/:id', asyncHandler(async (req, res) => {
     const [existingRows] = await db.query('SELECT * FROM rituals WHERE id = ?', [req.params.id]);
     if (existingRows.length === 0) return res.status(404).json({ error: 'Ritual not found.' });
 
@@ -88,13 +89,13 @@ function ritualsRouter(db) {
     );
     const [updatedRows] = await db.query('SELECT * FROM rituals WHERE id = ?', [req.params.id]);
     res.json(rowToRitual(updatedRows[0]));
-  });
+  }));
 
-  router.delete('/:id', async (req, res) => {
+  router.delete('/:id', asyncHandler(async (req, res) => {
     const [result] = await db.query('DELETE FROM rituals WHERE id = ?', [req.params.id]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Ritual not found.' });
     res.status(204).end();
-  });
+  }));
 
   return router;
 }
