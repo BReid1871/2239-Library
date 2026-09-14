@@ -25,6 +25,7 @@ function componentsRouter(db) {
     if (!rune) return res.status(400).json({ error: 'Please select a rune.' });
     if (!tier) return res.status(400).json({ error: 'Please select a tier.' });
     if (!desc || !String(desc).trim()) return res.status(400).json({ error: 'Please enter a description.' });
+    if (String(name).trim().length > 255) return res.status(400).json({ error: 'Name must be 255 characters or fewer.' });
 
     if (await nameTaken(String(name).trim(), rune, null)) {
       return res.status(409).json({ error: `A component with this name already exists for ${rune}.` });
@@ -56,6 +57,7 @@ function componentsRouter(db) {
     if (!rune) return res.status(400).json({ error: 'Please select a rune.' });
     if (!tier) return res.status(400).json({ error: 'Please select a tier.' });
     if (!desc || !String(desc).trim()) return res.status(400).json({ error: 'Please enter a description.' });
+    if (String(name).trim().length > 255) return res.status(400).json({ error: 'Name must be 255 characters or fewer.' });
 
     if (await nameTaken(String(name).trim(), rune, req.params.id)) {
       return res.status(409).json({ error: `A component with this name already exists for ${rune}.` });
