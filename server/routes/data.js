@@ -8,82 +8,88 @@ const { getTier } = require('../../public/reference-data');
 function dataRouter(db) {
   const router = express.Router();
 
-  router.get('/export', (req, res) => {
-    const rituals = db.prepare('SELECT * FROM rituals ORDER BY created_at DESC').all().map(rowToRitual);
-    const notes = db.prepare('SELECT * FROM notes ORDER BY created_at DESC').all();
-    const arrays = db.prepare('SELECT * FROM arrays ORDER BY created_at DESC').all().map(rowToArray);
-    res.json({ rituals, notes, arrays });
+  router.get('/export', async (req, res) => {
+    const [ritualRows] = await db.query('SELECT * FROM rituals ORDER BY created_at DESC');
+    const [noteRows] = await db.query('SELECT * FROM notes ORDER BY created_at DESC');
+    const [arrayRows] = await db.query('SELECT * FROM arrays ORDER BY created_at DESC');
+    res.json({
+      rituals: ritualRows.map(rowToRitual),
+      notes: noteRows,
+      arrays: arrayRows.map(rowToArray),
+    });
   });
 
-  router.post('/import', (req, res) => {
+  router.post('/import', async (req, res) => {
     const parsed = req.body || {};
     const importedRituals = Array.isArray(parsed) ? parsed : parsed.rituals || [];
     const importedNotes = Array.isArray(parsed) ? [] : parsed.notes || [];
     const importedArrays = Array.isArray(parsed) ? [] : parsed.arrays || [];
 
-    const insertRitual = db.prepare(
-      'INSERT INTO rituals (id, name, purpose, primary_rune, subs, tier, effect, created_at) VALUES (@id, @name, @purpose, @primary_rune, @subs, @tier, @effect, @created_at)'
-    );
-    const insertNote = db.prepare(
-      'INSERT INTO notes (id, title, body, created_at, updated_at) VALUES (@id, @title, @body, @created_at, @updated_at)'
-    );
-    const insertArray = db.prepare(
-      'INSERT INTO arrays (id, name, rows, cols, cells, created_at, updated_at) VALUES (@id, @name, @rows, @cols, @cells, @created_at, @updated_at)'
-    );
-
     let addedR = 0;
     let skippedR = 0;
     let dupesR = 0;
-    const currentRituals = db.prepare('SELECT * FROM rituals').all().map(rowToRitual);
-    importedRituals.forEach((r) => {
-      if (!r.name || !r.purpose || !r.primary || !r.effect) { skippedR++; return; }
+    const [currentRitualRows] = await db.query('SELECT * FROM rituals');
+    const currentRituals = currentRitualRows.map(rowToRitual);
+    for (const r of importedRituals) {
+      if (!r.name || !r.purpose || !r.primary || !r.effect) { skippedR++; continue; }
       const isDupe = currentRituals.some((existing) => ritualsMatch(existing, r));
-      if (isDupe) { dupesR++; return; }
+      if (isDupe) { dupesR++; continue; }
       const subs = r.subs || [];
       const row = {
         id: r.id || crypto.randomUUID(),
         name: r.name,
         purpose: r.purpose,
         primary_rune: r.primary,
-        subs: JSON.stringify(subs),
+        subs,
         tier: r.tier || getTier(subs.length),
         effect: r.effect,
         created_at: r.createdAt || new Date().toISOString(),
       };
-      insertRitual.run(row);
+      await db.query(
+        'INSERT INTO rituals (id, name, purpose, primary_rune, subs, tier, effect, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [row.id, row.name, row.purpose, row.primary_rune, JSON.stringify(row.subs), row.tier, row.effect, row.created_at]
+      );
       currentRituals.push(rowToRitual(row));
       addedR++;
-    });
+    }
 
     let addedN = 0;
-    const existingNoteIds = new Set(db.prepare('SELECT id FROM notes').all().map((n) => n.id));
-    importedNotes.forEach((n) => {
+    const [existingNoteRows] = await db.query('SELECT id FROM notes');
+    const existingNoteIds = new Set(existingNoteRows.map((n) => n.id));
+    for (const n of importedNotes) {
       const id = n.id || crypto.randomUUID();
-      if (existingNoteIds.has(id)) return;
+      if (existingNoteIds.has(id)) continue;
       const now = new Date().toISOString();
-      insertNote.run({ id, title: n.title || '', body: n.body || '', created_at: n.createdAt || now, updated_at: n.updatedAt || now });
+      await db.query('INSERT INTO notes (id, title, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', [
+        id,
+        n.title || '',
+        n.body || '',
+        n.createdAt || now,
+        n.updatedAt || now,
+      ]);
       existingNoteIds.add(id);
       addedN++;
-    });
+    }
 
     let addedA = 0;
-    const existingArrayIds = new Set(db.prepare('SELECT id FROM arrays').all().map((a) => a.id));
-    importedArrays.forEach((a) => {
+    const [existingArrayRows] = await db.query('SELECT id FROM arrays');
+    const existingArrayIds = new Set(existingArrayRows.map((a) => a.id));
+    for (const a of importedArrays) {
       const id = a.id || crypto.randomUUID();
-      if (existingArrayIds.has(id)) return;
+      if (existingArrayIds.has(id)) continue;
       const now = new Date().toISOString();
-      insertArray.run({
+      await db.query('INSERT INTO arrays (id, name, `rows`, cols, cells, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [
         id,
-        name: a.name || 'Untitled Array',
-        rows: Number.isInteger(a.rows) ? a.rows : 4,
-        cols: Number.isInteger(a.cols) ? a.cols : 4,
-        cells: JSON.stringify(a.cells || {}),
-        created_at: a.createdAt || now,
-        updated_at: a.updatedAt || now,
-      });
+        a.name || 'Untitled Array',
+        Number.isInteger(a.rows) ? a.rows : 4,
+        Number.isInteger(a.cols) ? a.cols : 4,
+        JSON.stringify(a.cells || {}),
+        a.createdAt || now,
+        a.updatedAt || now,
+      ]);
       existingArrayIds.add(id);
       addedA++;
-    });
+    }
 
     res.json({ addedR, skippedR, dupesR, addedN, addedA });
   });

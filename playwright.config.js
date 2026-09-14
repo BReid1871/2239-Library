@@ -10,7 +10,12 @@ const sandboxChromium = process.env.PLAYWRIGHT_BROWSERS_PATH === '/opt/pw-browse
 
 module.exports = defineConfig({
   testDir: 'tests/e2e',
-  fullyParallel: true,
+  globalSetup: require.resolve('./tests/e2e/global-setup.js'),
+  // The e2e run shares a MySQL database across tests (truncated once in
+  // globalSetup, not per test), so tests can't run in parallel workers
+  // without stepping on each other's data.
+  fullyParallel: false,
+  workers: 1,
   reporter: 'list',
   use: {
     baseURL: 'http://127.0.0.1:3100',
@@ -22,7 +27,12 @@ module.exports = defineConfig({
     reuseExistingServer: false,
     env: {
       PORT: '3100',
-      LIBRARY_DB_PATH: 'data/e2e-test.db',
+      MYSQLDATABASE: process.env.MYSQLDATABASE || 'library_test',
+      MYSQL_URL: process.env.MYSQL_URL || '',
+      MYSQLHOST: process.env.MYSQLHOST || '',
+      MYSQLPORT: process.env.MYSQLPORT || '',
+      MYSQLUSER: process.env.MYSQLUSER || '',
+      MYSQLPASSWORD: process.env.MYSQLPASSWORD || '',
     },
   },
 });

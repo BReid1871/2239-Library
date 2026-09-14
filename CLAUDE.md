@@ -2,7 +2,8 @@
 
 A website for tracking rituals, notes, custom components, and arrays in a
 homebrew magic system — originally a single-file HTML app persisting to
-browser `localStorage`, now a proper Node/Express + SQLite website.
+browser `localStorage`, now a proper Node/Express + MySQL website. Deployed
+on Railway, with a Railway-provisioned MySQL database.
 
 Built using the same agent-driven CI/CD loop as
 [CICaDa](https://github.com/BReid1871/CICaDa): an agent plans, implements,
@@ -26,18 +27,27 @@ final review.
 
 ## Running locally
 
+Needs a reachable MySQL server. Copy `.env.example` to `.env` (or export
+the same vars) and point it at a local MySQL, or at a Railway database if
+you have one — see `.env.example` for `MYSQL_URL` vs. the discrete
+`MYSQL*` vars.
+
 ```
 npm install
 npm start            # serves the app on http://localhost:3000
 make ci               # run everything: lint, unit, integration, e2e
 ```
 
+`make test-integration` and `make test-e2e` also need a reachable MySQL —
+they default to `library_test` on localhost if no env vars are set.
+
 ## Layout
 
 - `server/index.js` — Express app: serves `public/` as static files and
   mounts the JSON API under `/api`.
-- `server/db.js` — SQLite connection (`better-sqlite3`) and schema
-  (`rituals`, `notes`, `custom_components`, `arrays`).
+- `server/db.js` — MySQL connection pool (`mysql2/promise`), schema DDL
+  (`rituals`, `notes`, `custom_components`, `arrays`), and a
+  `truncateAll` helper used by tests to reset state between runs.
 - `server/routes/` — one Express router per resource, plus `data.js` for
   `GET /api/export` / `POST /api/import`.
 - `server/lib/rituals.js` — shared duplicate-ritual check.
@@ -46,7 +56,9 @@ make ci               # run everything: lint, unit, integration, e2e
 - `public/reference-data.js` — static app config (runes, tier rules,
   built-in components) shared between server and browser — not user data,
   so it isn't in the DB.
-- `data/` — gitignored; holds the SQLite database file, created on
-  startup.
+- `tests/helpers/testDb.js` — the shared MySQL pool integration tests use,
+  reset with `TRUNCATE` in each test's `beforeEach` (see
+  `vitest.config.js`'s `fileParallelism: false` — test files run
+  sequentially since they share one database).
 - `tests/unit`, `tests/integration`, `tests/e2e` — run via `ci/*.sh` /
   `make test-unit|test-integration|test-e2e`.
