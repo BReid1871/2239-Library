@@ -87,11 +87,22 @@ they default to `library_test` on localhost if no env vars are set.
   between `arrays.html`'s hex board, the `server/routes/arrays.js`/`data.js`
   board-radius guard rail, and its own unit tests. Ritual size is a
   property of an array *placement* (`{ id, ritualId, q, r, size,
-  isEffector }` in `arrays.placements`), not of the ritual itself — the
-  same ritual can be placed at different sizes. `isEffector` (default
-  false) marks which placements originate directional reach lines to
-  other rituals within range; most placements just sit there and can be
-  reached, but don't reach out themselves.
+  isEffector, isAntiEffector }` in `arrays.placements`), not of the ritual
+  itself — the same ritual can be placed at different sizes. `isEffector`
+  and `isAntiEffector` (both default false, mutually exclusive) mark which
+  placements originate directional reach lines to other rituals within
+  range — most placements just sit there and can be reached, but don't
+  reach out themselves. An effector *activates* what it reaches; an
+  anti-effector *deactivates* it.
+- `public/simulation.js` — shared with `hex.js`'s UMD pattern: computes the
+  reach graph (`computeReaches`, generalizing effector/anti-effector
+  reaches with a `kind`) and simulates what happens when a person triggers
+  one placement (`simulate`), propagating activate/deactivate effects
+  pass-by-pass until nothing changes. `rituals.triggerable` (default true)
+  gates who can *start* a simulation — a non-triggerable ritual can still
+  be activated by an effector, just not directly by a person — so
+  `arrays.html`'s Simulations panel only offers one simulation per
+  triggerable placement in the array.
 - `tests/helpers/testDb.js` — the shared MySQL pool integration tests use,
   reset with `TRUNCATE` in each test's `beforeEach` (see
   `vitest.config.js`'s `fileParallelism: false` — test files run

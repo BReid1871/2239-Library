@@ -19,10 +19,28 @@
 .hex-cell.preview-range { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 2 2; }
 .hex-cell.preview-footprint { fill: var(--accent); fill-opacity: 0.35; stroke: var(--accent); stroke-width: 2; }
 .hex-reach-line { stroke: var(--accent); stroke-width: 1.5; opacity: 0.55; pointer-events: none; }
+.hex-reach-line.anti { stroke: #dc2626; stroke-dasharray: 4 3; }
 .hex-arrowhead { fill: var(--accent); opacity: 0.55; }
+.hex-arrowhead.anti { fill: #dc2626; }
 .hex-order-badge circle { fill: var(--accent); stroke: var(--bg2); stroke-width: 1.5; }
+.hex-order-badge.anti circle { fill: #dc2626; }
 .hex-order-badge text { fill: #fff; font-size: 9px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
 .effector-tag { font-size: 10px; padding: 1px 8px; }
+.anti-effector-tag { font-size: 10px; padding: 1px 8px; }
+.anti-effector-tag.on { border-color: #dc2626; color: #dc2626; }
+.non-triggerable-badge { font-size: 10px; padding: 1px 8px; background: var(--bg2); color: var(--text3); border: 0.5px solid var(--border); border-radius: 99px; }
+.simulation-panel { border: 0.5px solid var(--border); border-radius: var(--radius); background: var(--bg2); flex-shrink: 0; margin-top: 8px; max-height: 220px; overflow-y: auto; }
+.simulation-entry { border-bottom: 0.5px solid var(--border); }
+.simulation-entry:last-child { border-bottom: none; }
+.simulation-entry-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; cursor: pointer; user-select: none; font-size: 12px; }
+.simulation-entry-header:hover { color: var(--accent); }
+.simulation-entry-body { padding: 0 10px 8px; font-size: 11px; }
+.simulation-warning { color: #dc2626; margin: 2px 0 6px; }
+.simulation-roster-item { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.simulation-roster-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.simulation-roster-dot.active { background: var(--accent); }
+.simulation-roster-dot.inactive { background: var(--border2); }
+.simulation-empty { font-size: 11px; color: var(--text3); padding: 8px 10px; }
 .placement-list { width: 210px; flex-shrink: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .placement-item { display: flex; align-items: flex-start; gap: 6px; padding: 7px 9px; border-radius: var(--radius); background: var(--bg2); border: 0.5px solid var(--border); }
 .placement-item-body { flex: 1; min-width: 0; }
@@ -81,6 +99,7 @@
 
 <script src="reference-data.js"></script>
 <script src="hex.js"></script>
+<script src="simulation.js"></script>
 <script src="shared.js"></script>
 <script>
 renderNav('nav', 'arrays', [], function() {});
@@ -123,6 +142,9 @@ function openRitualPreview(id) {
   html += '<div>';
   html += '<span class="badge" style="background:' + tc + '22;color:' + tc + ';border:0.5px solid ' + tc + '44">' + r.tier + '</span>';
   html += '<span class="badge" style="background:var(--bg2);color:var(--text2);border:0.5px solid var(--border)">' + esc(r.purpose) + '</span>';
+  if (r.triggerable === false) {
+    html += '<span class="badge" style="background:var(--bg2);color:var(--text3);border:0.5px solid var(--border)">Non-triggerable</span>';
+  }
   html += '</div></div>';
   html += '<button id="ritual-preview-close">Close</button>';
   html += '</div>';
@@ -239,6 +261,7 @@ function openArray(id) {
   if (!arr) return;
   currentArrayId = id;
   zoomLevel = 1;
+  simulationOpenIds = {};
   renderArrayList();
   renderArrayEditor(arr);
 }
@@ -279,30 +302,15 @@ function occupiedHexMap(placements) {
   return map;
 }
 
-// Every directed "reach": effector ritual A's effect touches ritual B's
-// anchor within A's range. Only placements marked as effectors (see the
-// per-placement toggle in the sidebar) originate a reach — most rituals in
-// an array just sit there and can be reached, but don't reach out
-// themselves. Sorted closest-first — that ranking IS the order effects
-// occur in, which is what the numbered overlay shows.
+// Every directed "reach": an effector or anti-effector placement's effect
+// touches another placement's anchor within its range (see the per-placement
+// toggle in the sidebar) — most rituals in an array just sit there and can
+// be reached, but don't reach out themselves. Purely geometric, independent
+// of any activation state — see simulation.js's computeReaches for details,
+// shared with the Simulations panel below so the board and the simulation
+// never disagree about what reaches what.
 function computeReaches(placements) {
-  var reaches = [];
-  var effectors = placements.filter(function(p) { return !!p.placement.isEffector; });
-  effectors.forEach(function(a) {
-    placements.forEach(function(b) {
-      if (a === b) return;
-      var dist = Hex.hexDistance(a.anchor, b.anchor);
-      if (dist <= a.range) reaches.push({ from: a, to: b, distance: dist });
-    });
-  });
-  reaches.sort(function(x, y) {
-    if (x.distance !== y.distance) return x.distance - y.distance;
-    var xk = x.from.placement.id + '>' + x.to.placement.id;
-    var yk = y.from.placement.id + '>' + y.to.placement.id;
-    return xk < yk ? -1 : xk > yk ? 1 : 0;
-  });
-  reaches.forEach(function(reach, i) { reach.order = i + 1; });
-  return reaches;
+  return Simulation.computeReaches(placements);
 }
 
 function svgEl(tag, attrs) {
@@ -332,6 +340,15 @@ function renderHexBoard(arr, placements, zoom, reaches) {
   });
   arrowMarker.appendChild(svgEl('path', { d: 'M0,0 L10,5 L0,10 Z', class: 'hex-arrowhead' }));
   defs.appendChild(arrowMarker);
+  // Anti-effector reaches get their own marker so effector (activates) and
+  // anti-effector (deactivates) reach lines are visually distinguishable on
+  // the board without relying on a tooltip.
+  var antiArrowMarker = svgEl('marker', {
+    id: 'reach-arrowhead-anti', viewBox: '0 0 10 10', refX: '8', refY: '5',
+    markerWidth: '6', markerHeight: '6', orient: 'auto-start-reverse',
+  });
+  antiArrowMarker.appendChild(svgEl('path', { d: 'M0,0 L10,5 L0,10 Z', class: 'hex-arrowhead anti' }));
+  defs.appendChild(antiArrowMarker);
   svg.appendChild(defs);
 
   pts.forEach(function(p) {
@@ -381,21 +398,24 @@ function renderHexBoard(arr, placements, zoom, reaches) {
     seg = Hex.shortenSegment(seg.x1, seg.y1, seg.x2, seg.y2, REACH_START_PAD, REACH_END_PAD);
     reach.line = seg;
 
+    var isAnti = reach.kind === 'anti-effector';
     var line = svgEl('line', {
       x1: seg.x1, y1: seg.y1, x2: seg.x2, y2: seg.y2,
-      class: 'hex-reach-line', 'marker-end': 'url(#reach-arrowhead)',
+      class: 'hex-reach-line' + (isAnti ? ' anti' : ''),
+      'marker-end': isAnti ? 'url(#reach-arrowhead-anti)' : 'url(#reach-arrowhead)',
     });
     svg.appendChild(line);
   });
   reaches.forEach(function(reach) {
     var mx = (reach.line.x1 + reach.line.x2) / 2, my = (reach.line.y1 + reach.line.y2) / 2;
-    var g = svgEl('g', { class: 'hex-order-badge' });
+    var verb = reach.kind === 'anti-effector' ? 'Deactivates' : 'Activates';
+    var g = svgEl('g', { class: 'hex-order-badge' + (reach.kind === 'anti-effector' ? ' anti' : '') });
     g.appendChild(svgEl('circle', { cx: mx, cy: my, r: 7.5 }));
     var text = svgEl('text', { x: mx, y: my });
     text.textContent = reach.order;
     g.appendChild(text);
     var title = svgEl('title', {});
-    title.textContent = reach.order + '. ' + reach.from.ritual.name + ' → ' + reach.to.ritual.name + ' (distance ' + reach.distance + ')';
+    title.textContent = reach.order + '. ' + reach.from.ritual.name + ' ' + verb + ' ' + reach.to.ritual.name + ' (distance ' + reach.distance + ')';
     g.appendChild(title);
     svg.appendChild(g);
   });
@@ -441,20 +461,133 @@ function renderResolutionLog(reaches) {
     if (reaches.length === 0) {
       var empty = document.createElement('div');
       empty.style.cssText = 'font-size:11px;color:var(--text3);padding:2px 0 6px;';
-      empty.textContent = 'No reach lines yet — mark a placement as an Effector to see resolution order here.';
+      empty.textContent = 'No reach lines yet — mark a placement as an Effector or Anti-effector to see resolution order here.';
       body.appendChild(empty);
     } else {
       var ol = document.createElement('ol');
       ol.style.cssText = 'padding-left:18px;font-size:12px;line-height:1.7;';
       reaches.forEach(function(reach) {
         var li = document.createElement('li');
-        li.textContent = reach.from.ritual.name + ' → ' + reach.to.ritual.name + ' (distance ' + reach.distance + ')';
+        var verb = reach.kind === 'anti-effector' ? 'Deactivates' : 'Activates';
+        li.textContent = reach.from.ritual.name + ' ' + verb + ' ' + reach.to.ritual.name + ' (distance ' + reach.distance + ')';
         ol.appendChild(li);
       });
       body.appendChild(ol);
     }
     wrap.appendChild(body);
   }
+  return wrap;
+}
+
+// Which triggerable placements have their Simulations entry expanded —
+// keyed by placement id, reset whenever a different array is opened (see
+// openArray). A person could trigger any triggerable ritual in the array, so
+// there's one simulation per triggerable placement rather than a single
+// array-wide one.
+var simulationOpenIds = {};
+
+// One collapsible entry per triggerable placement, each running
+// Simulation.simulate() (public/simulation.js) starting from that placement
+// and showing the pass-by-pass effect log plus the final active/inactive
+// state of every placement in the array — "what happens if a person
+// triggers this ritual". Reaches are the same ones the board/resolution log
+// already computed, so the simulation never disagrees with what's drawn.
+function renderSimulations(arr, placements, reaches) {
+  var wrap = document.createElement('div');
+  wrap.className = 'simulation-panel';
+
+  var header = document.createElement('div');
+  header.style.cssText = 'padding:6px 10px;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.03em;';
+  var triggerables = placements.filter(function(entry) { return entry.ritual.triggerable !== false; });
+  header.textContent = 'Simulations (' + triggerables.length + ')';
+  wrap.appendChild(header);
+
+  if (triggerables.length === 0) {
+    var empty = document.createElement('div');
+    empty.className = 'simulation-empty';
+    empty.textContent = 'No triggerable rituals in this array yet — mark a ritual as triggerable, or place one, to see a simulation.';
+    wrap.appendChild(empty);
+    return wrap;
+  }
+
+  triggerables.forEach(function(entry) {
+    var placementId = entry.placement.id;
+    var isOpen = !!simulationOpenIds[placementId];
+
+    var entryEl = document.createElement('div');
+    entryEl.className = 'simulation-entry';
+
+    var entryHeader = document.createElement('div');
+    entryHeader.className = 'simulation-entry-header';
+    var name = document.createElement('span');
+    name.textContent = entry.ritual.name;
+    var arrow = document.createElement('span');
+    arrow.textContent = isOpen ? '▾' : '▸';
+    entryHeader.appendChild(name);
+    entryHeader.appendChild(arrow);
+    entryHeader.onclick = function() {
+      simulationOpenIds[placementId] = !isOpen;
+      renderArrayEditor(arr);
+    };
+    entryEl.appendChild(entryHeader);
+
+    if (isOpen) {
+      var body = document.createElement('div');
+      body.className = 'simulation-entry-body';
+      var result = Simulation.simulate(placements, reaches, placementId);
+
+      if (!result.stabilized) {
+        var warning = document.createElement('div');
+        warning.className = 'simulation-warning';
+        warning.textContent = 'Effects kept changing and didn’t settle after ' + result.passes.length + ' passes — showing the state so far.';
+        body.appendChild(warning);
+      }
+
+      if (result.passes.length === 0) {
+        var noEffects = document.createElement('div');
+        noEffects.style.cssText = 'color:var(--text3);margin-bottom:6px;';
+        noEffects.textContent = 'Triggering ' + entry.ritual.name + ' has no further effect on anything else in the array.';
+        body.appendChild(noEffects);
+      } else {
+        result.passes.forEach(function(pass) {
+          var passLabel = document.createElement('div');
+          passLabel.style.cssText = 'font-weight:500;margin-top:4px;';
+          passLabel.textContent = 'Pass ' + pass.pass;
+          body.appendChild(passLabel);
+          var passList = document.createElement('ul');
+          passList.style.cssText = 'padding-left:16px;line-height:1.6;margin:0 0 4px;';
+          pass.effects.forEach(function(effect) {
+            var li = document.createElement('li');
+            var verb = effect.kind === 'anti-effector' ? 'deactivates' : 'activates';
+            li.textContent = effect.from.ritual.name + ' ' + verb + ' ' + effect.to.ritual.name;
+            passList.appendChild(li);
+          });
+          body.appendChild(passList);
+        });
+      }
+
+      var rosterLabel = document.createElement('div');
+      rosterLabel.style.cssText = 'font-weight:500;margin-top:6px;';
+      rosterLabel.textContent = 'Final state';
+      body.appendChild(rosterLabel);
+      placements.forEach(function(rosterEntry) {
+        var isActive = !!result.active[rosterEntry.placement.id];
+        var row = document.createElement('div');
+        row.className = 'simulation-roster-item';
+        var dot = document.createElement('span');
+        dot.className = 'simulation-roster-dot ' + (isActive ? 'active' : 'inactive');
+        var label = document.createElement('span');
+        label.textContent = rosterEntry.ritual.name + ' — ' + (isActive ? 'Active' : 'Inactive');
+        row.appendChild(dot); row.appendChild(label);
+        body.appendChild(row);
+      });
+
+      entryEl.appendChild(body);
+    }
+
+    wrap.appendChild(entryEl);
+  });
+
   return wrap;
 }
 
@@ -477,8 +610,11 @@ function exportBoardAsPng(arr) {
   styleEl.textContent =
     '.hex-cell { fill: ' + cs.getPropertyValue('--bg') + '; stroke: ' + cs.getPropertyValue('--border2') + '; stroke-width: 1; }' +
     '.hex-reach-line { stroke: ' + cs.getPropertyValue('--accent') + '; stroke-width: 1.5; opacity: 0.55; }' +
+    '.hex-reach-line.anti { stroke: #dc2626; stroke-dasharray: 4 3; }' +
     '.hex-arrowhead { fill: ' + cs.getPropertyValue('--accent') + '; opacity: 0.55; }' +
+    '.hex-arrowhead.anti { fill: #dc2626; }' +
     '.hex-order-badge circle { fill: ' + cs.getPropertyValue('--accent') + '; stroke: ' + cs.getPropertyValue('--bg2') + '; stroke-width: 1.5; }' +
+    '.hex-order-badge.anti circle { fill: #dc2626; }' +
     '.hex-order-badge text { fill: #fff; font-size: 9px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }' +
     'text { font-family: system-ui, -apple-system, sans-serif; }';
   clone.insertBefore(styleEl, clone.firstChild);
@@ -551,18 +687,39 @@ function renderPlacementList(arr, placements) {
     meta.textContent = 'Range ' + entry.range;
 
     var metaRow = document.createElement('div');
-    metaRow.style.cssText = 'display:flex;align-items:center;gap:6px;';
+    metaRow.style.cssText = 'display:flex;align-items:center;gap:6px;flex-wrap:wrap;';
+    // Effector and anti-effector are mutually exclusive per placement —
+    // toggling one on clears the other.
     var effectorTag = document.createElement('span');
     effectorTag.className = 'tag effector-tag' + (entry.placement.isEffector ? ' on' : '');
     effectorTag.textContent = 'Effector';
-    effectorTag.title = 'Only effectors emit reach lines to other rituals.';
+    effectorTag.title = 'Activates every ritual it reaches.';
     effectorTag.onclick = function() {
       entry.placement.isEffector = !entry.placement.isEffector;
+      if (entry.placement.isEffector) entry.placement.isAntiEffector = false;
       renderArrayEditor(arr);
       renderArrayList();
       saveArray(arr);
     };
-    metaRow.appendChild(meta); metaRow.appendChild(effectorTag);
+    var antiEffectorTag = document.createElement('span');
+    antiEffectorTag.className = 'tag anti-effector-tag' + (entry.placement.isAntiEffector ? ' on' : '');
+    antiEffectorTag.textContent = 'Anti-effector';
+    antiEffectorTag.title = 'Deactivates every ritual it reaches.';
+    antiEffectorTag.onclick = function() {
+      entry.placement.isAntiEffector = !entry.placement.isAntiEffector;
+      if (entry.placement.isAntiEffector) entry.placement.isEffector = false;
+      renderArrayEditor(arr);
+      renderArrayList();
+      saveArray(arr);
+    };
+    metaRow.appendChild(meta); metaRow.appendChild(effectorTag); metaRow.appendChild(antiEffectorTag);
+    if (entry.ritual.triggerable === false) {
+      var nonTriggerableBadge = document.createElement('span');
+      nonTriggerableBadge.className = 'non-triggerable-badge';
+      nonTriggerableBadge.textContent = 'Non-triggerable';
+      nonTriggerableBadge.title = 'Can only be activated by an effector, not by a person — edit this on the ritual itself.';
+      metaRow.appendChild(nonTriggerableBadge);
+    }
 
     body.appendChild(name); body.appendChild(metaRow);
 
@@ -684,6 +841,7 @@ function renderArrayEditor(arr) {
 
   area.appendChild(topBar);
   area.appendChild(renderResolutionLog(reaches));
+  area.appendChild(renderSimulations(arr, placements, reaches));
   area.appendChild(row);
 }
 
@@ -914,7 +1072,7 @@ function attemptPlacement(arr, hex, ritual, size) {
     return;
   }
 
-  arr.placements.push({ id: crypto.randomUUID(), ritualId: ritual.id, q: hex.q, r: hex.r, size: size, isEffector: false });
+  arr.placements.push({ id: crypto.randomUUID(), ritualId: ritual.id, q: hex.q, r: hex.r, size: size, isEffector: false, isAntiEffector: false });
   closePicker();
   renderArrayEditor(arr);
   renderArrayList();

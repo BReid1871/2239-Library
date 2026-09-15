@@ -107,11 +107,63 @@ test('the resolution log lists reaches as text, matching the board', async ({ pa
   await page.locator('.array-card', { hasText: 'E2E Log Array' }).click();
 
   await expect(page.locator('text=Resolution order (1)')).toBeVisible();
-  await expect(page.locator('li', { hasText: 'Log Source → Log Target (distance 1)' })).toBeVisible();
+  await expect(page.locator('li', { hasText: 'Log Source Activates Log Target (distance 1)' })).toBeVisible();
 
   // Collapsing hides the list but keeps the count visible in the header.
   await page.locator('text=Resolution order (1)').click();
-  await expect(page.locator('li', { hasText: 'Log Source → Log Target (distance 1)' })).toBeHidden();
+  await expect(page.locator('li', { hasText: 'Log Source Activates Log Target (distance 1)' })).toBeHidden();
+
+  await request.delete(`/api/arrays/${arr.id}`);
+});
+
+test('anti-effectors, non-triggerable rituals, and the activation simulation', async ({ page, request }) => {
+  const ritualA = await (await request.post('/api/rituals', { data: {
+    name: 'Sim Source', purpose: 'Enchantment', primary: 'Potency', subs: [], effect: 'a',
+  } })).json();
+  const ritualB = await (await request.post('/api/rituals', { data: {
+    name: 'Sim Antidote', purpose: 'Familiar/Summoning', primary: 'Cognizance', subs: [], effect: 'b',
+  } })).json();
+  const ritualC = await (await request.post('/api/rituals', { data: {
+    name: 'Sim Bystander', purpose: 'Boon', primary: 'Perpetuation', subs: [], effect: 'c', triggerable: false,
+  } })).json();
+
+  // A is an effector reaching both B (distance 1) and C (distance 2, its
+  // size-1 range). B is an anti-effector reaching A and C (distance 1
+  // each). C is a plain, non-triggerable placement.
+  const arr = await (await request.post('/api/arrays', { data: {
+    name: 'E2E Simulation Array',
+    radius: 3,
+    placements: [
+      { id: 'p1', ritualId: ritualA.id, q: 0, r: 0, size: 1, isEffector: true, isAntiEffector: false },
+      { id: 'p2', ritualId: ritualB.id, q: 1, r: 0, size: 1, isEffector: false, isAntiEffector: true },
+      { id: 'p3', ritualId: ritualC.id, q: 2, r: 0, size: 1, isEffector: false, isAntiEffector: false },
+    ],
+  } })).json();
+
+  await page.goto('/arrays.html');
+  await page.locator('.array-card', { hasText: 'E2E Simulation Array' }).click();
+
+  // The non-triggerable ritual is flagged in the placement list.
+  await expect(
+    page.locator('.placement-item', { hasText: 'Sim Bystander' }).locator('.non-triggerable-badge')
+  ).toHaveText('Non-triggerable');
+
+  // Anti-effector reach lines are visually distinguished on the board.
+  await expect(page.locator('svg line.hex-reach-line.anti')).toHaveCount(2);
+  await expect(page.locator('svg line.hex-reach-line:not(.anti)')).toHaveCount(2);
+
+  // Only triggerable placements (A and B) get a simulation entry.
+  await expect(page.locator('text=Simulations (2)')).toBeVisible();
+
+  // Simulating A: pass 1 activates B and C; pass 2, B (now active) is an
+  // anti-effector and deactivates both A and C — leaving only B active.
+  await page.locator('.simulation-entry-header', { hasText: 'Sim Source' }).click();
+  const simBody = page.locator('.simulation-entry', { hasText: 'Sim Source' }).locator('.simulation-entry-body');
+  await expect(simBody.locator('li', { hasText: 'Sim Source activates Sim Antidote' })).toBeVisible();
+  await expect(simBody.locator('li', { hasText: 'Sim Antidote deactivates Sim Source' })).toBeVisible();
+  await expect(simBody.locator('.simulation-roster-item', { hasText: 'Sim Source — Inactive' })).toBeVisible();
+  await expect(simBody.locator('.simulation-roster-item', { hasText: 'Sim Antidote — Active' })).toBeVisible();
+  await expect(simBody.locator('.simulation-roster-item', { hasText: 'Sim Bystander — Inactive' })).toBeVisible();
 
   await request.delete(`/api/arrays/${arr.id}`);
 });

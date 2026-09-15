@@ -87,6 +87,11 @@
 .tag-input-row { display: flex; gap: 6px; margin-top: 6px; }
 .tag-input-row input { flex: 1; }
 
+/* Triggerable checkbox */
+.checkbox-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); cursor: pointer; user-select: none; }
+.checkbox-row input { cursor: pointer; }
+.non-triggerable-badge { display: inline-flex; font-size: 11px; font-weight: 500; padding: 2px 9px; border-radius: 99px; margin-right: 4px; background: var(--bg2); color: var(--text3); border: 0.5px solid var(--border); }
+
 /* Components used (rituals) */
 .comp-group-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0 4px; }
 .comp-group-label:first-child { margin-top: 6px; }
@@ -160,6 +165,9 @@
         <option>Bailiwick</option>
         <option>Boon</option>
       </select>
+
+      <label class="form-label">Activation</label>
+      <label class="checkbox-row"><input type="checkbox" id="f-triggerable" checked> Triggerable by a person (unchecked: can only be activated by an effector in an array)</label>
 
       <label class="form-label">Primary rune <span class="required-star">*</span></label>
       <div class="pill-group" id="f-primary"></div>
@@ -510,6 +518,9 @@ function openDetail(id) {
   html += '<div style="margin-bottom:8px">';
   html += '<span class="badge" style="background:' + tc + '22;color:' + tc + ';border:0.5px solid ' + tc + '44">' + r.tier + '</span>';
   html += '<span class="badge" style="background:var(--bg2);color:var(--text2);border:0.5px solid var(--border)">' + esc(r.purpose) + '</span>';
+  if (r.triggerable === false) {
+    html += '<span class="non-triggerable-badge">Non-triggerable</span>';
+  }
   html += '</div></div>';
   html += '<div style="display:flex;gap:6px;align-items:center;">';
   html += '<button onclick="ritualHistoryAction(\'' + r.id + '\', \'undo\')" title="Undo last edit">&#8630; Undo</button>';
@@ -586,6 +597,7 @@ function editEntry(id) {
   document.getElementById('f-name').value = r.name;
   document.getElementById('f-purpose').value = r.purpose;
   document.getElementById('f-effect').value = r.effect || '';
+  document.getElementById('f-triggerable').checked = r.triggerable !== false;
   fPrimary = r.primary;
   fSubs = {};
   (r.subs || []).forEach(function(s) { fSubs[s] = true; });
@@ -745,7 +757,8 @@ async function saveRitual() {
   var subs = Object.keys(fSubs);
   var tags = Object.keys(fTags);
   var components = Object.keys(fComponents).map(function(k) { return fComponents[k]; });
-  var payload = { name: name, purpose: purpose, primary: fPrimary, subs: subs, effect: effect, tags: tags, components: components };
+  var triggerable = document.getElementById('f-triggerable').checked;
+  var payload = { name: name, purpose: purpose, primary: fPrimary, subs: subs, effect: effect, tags: tags, components: components, triggerable: triggerable };
 
   try {
     if (fEditId) {
@@ -774,6 +787,7 @@ function clearForm() {
   document.getElementById('f-name').value = '';
   document.getElementById('f-purpose').value = '';
   document.getElementById('f-effect').value = '';
+  document.getElementById('f-triggerable').checked = true;
   document.getElementById('form-msg').textContent = '';
   fPrimary = null; fSubs = {}; fTags = {}; fComponents = {}; fEditId = null;
   document.getElementById('form-add-title').textContent = 'Add a Ritual';

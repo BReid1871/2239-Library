@@ -13,7 +13,8 @@ const SCHEMA_STATEMENTS = [
     effect TEXT NOT NULL,
     created_at VARCHAR(32) NOT NULL,
     tags JSON NOT NULL DEFAULT ('[]'),
-    components JSON NOT NULL DEFAULT ('[]')
+    components JSON NOT NULL DEFAULT ('[]'),
+    triggerable TINYINT(1) NOT NULL DEFAULT 1
   )`,
   `CREATE TABLE IF NOT EXISTS notes (
     id VARCHAR(36) PRIMARY KEY,
@@ -76,6 +77,7 @@ const SCHEMA_STATEMENTS = [
     effect TEXT NOT NULL,
     tags JSON NOT NULL,
     components JSON NOT NULL,
+    triggerable TINYINT(1) NOT NULL DEFAULT 1,
     created_at VARCHAR(32) NOT NULL,
     PRIMARY KEY (ritual_id, seq)
   )`,
@@ -111,6 +113,8 @@ const MIGRATIONS = [
   { table: 'notes', column: 'links', kind: 'add', ddl: "ALTER TABLE notes ADD COLUMN links JSON NOT NULL DEFAULT ('[]')" },
   { table: 'rituals', column: 'history_seq', kind: 'add', ddl: 'ALTER TABLE rituals ADD COLUMN history_seq INT NOT NULL DEFAULT 0' },
   { table: 'notes', column: 'history_seq', kind: 'add', ddl: 'ALTER TABLE notes ADD COLUMN history_seq INT NOT NULL DEFAULT 0' },
+  { table: 'rituals', column: 'triggerable', kind: 'add', ddl: 'ALTER TABLE rituals ADD COLUMN triggerable TINYINT(1) NOT NULL DEFAULT 1' },
+  { table: 'ritual_history', column: 'triggerable', kind: 'add', ddl: 'ALTER TABLE ritual_history ADD COLUMN triggerable TINYINT(1) NOT NULL DEFAULT 1' },
 ];
 
 function resolveConnectionConfig() {
