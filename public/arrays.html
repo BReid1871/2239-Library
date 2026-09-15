@@ -297,7 +297,26 @@ function livePlacements(arr) {
       range: Hex.rangeForSize(size),
     });
   });
+  assignDisplayNames(out);
   return out;
+}
+
+// When the same ritual is placed more than once in an array, every
+// placement would otherwise show the same bare name everywhere (the board,
+// the resolution log, the placement list, the Simulations panel) with no
+// way to tell which is which — so duplicates get a "(1)", "(2)", … suffix,
+// numbered in placement order. A ritual placed only once keeps its plain
+// name. Set once here and used by every renderer instead of `ritual.name`
+// directly, so the numbering is always consistent across the page.
+function assignDisplayNames(entries) {
+  var counts = {};
+  entries.forEach(function(entry) { counts[entry.ritual.name] = (counts[entry.ritual.name] || 0) + 1; });
+  var seen = {};
+  entries.forEach(function(entry) {
+    if (counts[entry.ritual.name] <= 1) { entry.displayName = entry.ritual.name; return; }
+    seen[entry.ritual.name] = (seen[entry.ritual.name] || 0) + 1;
+    entry.displayName = entry.ritual.name + ' (' + seen[entry.ritual.name] + ')';
+  });
 }
 
 function occupiedHexMap(placements) {
@@ -376,7 +395,7 @@ function renderHexBoard(arr, placements, zoom, reaches) {
       poly.style.fill = rune ? rune.color : '#999';
       poly.style.fillOpacity = isAnchor ? '0.85' : '0.35';
       var title = svgEl('title', {});
-      title.textContent = entry.ritual.name + (isAnchor ? ' (size ' + entry.size + ')' : '');
+      title.textContent = entry.displayName + (isAnchor ? ' (size ' + entry.size + ')' : '');
       poly.appendChild(title);
     } else {
       poly.onclick = function() { openRitualPicker(arr, p.hex); };
@@ -423,7 +442,7 @@ function renderHexBoard(arr, placements, zoom, reaches) {
     text.textContent = reach.order;
     g.appendChild(text);
     var title = svgEl('title', {});
-    title.textContent = reach.order + '. ' + reach.from.ritual.name + ' ' + verb + ' ' + reach.to.ritual.name + ' (distance ' + reach.distance + ')';
+    title.textContent = reach.order + '. ' + reach.from.displayName + ' ' + verb + ' ' + reach.to.displayName + ' (distance ' + reach.distance + ')';
     g.appendChild(title);
     svg.appendChild(g);
   });
@@ -477,7 +496,7 @@ function renderResolutionLog(reaches) {
       reaches.forEach(function(reach) {
         var li = document.createElement('li');
         var verb = reach.kind === 'anti-effector' ? 'Deactivates' : 'Activates';
-        li.textContent = reach.from.ritual.name + ' ' + verb + ' ' + reach.to.ritual.name + ' (distance ' + reach.distance + ')';
+        li.textContent = reach.from.displayName + ' ' + verb + ' ' + reach.to.displayName + ' (distance ' + reach.distance + ')';
         ol.appendChild(li);
       });
       body.appendChild(ol);
@@ -528,7 +547,7 @@ function renderSimulations(arr, placements, reaches) {
     var entryHeader = document.createElement('div');
     entryHeader.className = 'simulation-entry-header';
     var name = document.createElement('span');
-    name.textContent = entry.ritual.name;
+    name.textContent = entry.displayName;
     var arrow = document.createElement('span');
     arrow.textContent = isOpen ? '▾' : '▸';
     entryHeader.appendChild(name);
@@ -554,7 +573,7 @@ function renderSimulations(arr, placements, reaches) {
       if (result.passes.length === 0) {
         var noEffects = document.createElement('div');
         noEffects.style.cssText = 'color:var(--text3);margin-bottom:6px;';
-        noEffects.textContent = 'Triggering ' + entry.ritual.name + ' has no further effect on anything else in the array.';
+        noEffects.textContent = 'Triggering ' + entry.displayName + ' has no further effect on anything else in the array.';
         body.appendChild(noEffects);
       } else {
         result.passes.forEach(function(pass) {
@@ -567,8 +586,8 @@ function renderSimulations(arr, placements, reaches) {
           pass.effects.forEach(function(effect) {
             var li = document.createElement('li');
             var verb = effect.kind === 'anti-effector' ? 'deactivates' : 'activates';
-            var fromNames = effect.edges.map(function(e) { return e.from.ritual.name; }).join(', ');
-            li.textContent = fromNames + ' ' + verb + ' ' + effect.to.ritual.name;
+            var fromNames = effect.edges.map(function(e) { return e.from.displayName; }).join(', ');
+            li.textContent = fromNames + ' ' + verb + ' ' + effect.to.displayName;
             passList.appendChild(li);
           });
           body.appendChild(passList);
@@ -586,7 +605,7 @@ function renderSimulations(arr, placements, reaches) {
         var dot = document.createElement('span');
         dot.className = 'simulation-roster-dot ' + (isActive ? 'active' : 'inactive');
         var label = document.createElement('span');
-        label.textContent = rosterEntry.ritual.name + ' — ' + (isActive ? 'Active' : 'Inactive');
+        label.textContent = rosterEntry.displayName + ' — ' + (isActive ? 'Active' : 'Inactive');
         row.appendChild(dot); row.appendChild(label);
         body.appendChild(row);
       });
@@ -691,7 +710,7 @@ function renderPlacementList(arr, placements) {
 
     var body = document.createElement('div');
     body.className = 'placement-item-body';
-    var name = document.createElement('div'); name.className = 'placement-item-name'; name.textContent = entry.ritual.name;
+    var name = document.createElement('div'); name.className = 'placement-item-name'; name.textContent = entry.displayName;
     var meta = document.createElement('div'); meta.className = 'placement-item-meta';
     meta.textContent = 'Range ' + entry.range;
 
