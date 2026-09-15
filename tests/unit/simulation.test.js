@@ -154,3 +154,43 @@ test('simulate returns null for an unknown start placement id', () => {
   var reaches = computeReaches(entries);
   expect(simulate(entries, reaches, 'nope')).toBeNull();
 });
+
+test('simulate: two same-kind sources at different distances both get credited, not just the farther one', () => {
+  // A line of 4: plain(0) - trigger(1, effector) - antiNear(2, anti-effector) -
+  // antiFar(3, anti-effector), each range 2. The trigger activates all three
+  // others directly on pass 1. On pass 2: trigger is reached by antiNear
+  // (distance 1) and antiFar (distance 2), both anti-effectors — not a
+  // conflict (same kind), so BOTH should be credited for deactivating it,
+  // not just antiFar because it's farther.
+  var entries = [
+    entry('plain', 0, 0, {}),
+    entry('trigger', 1, 0, { isEffector: true, range: 2 }),
+    entry('antiNear', 2, 0, { isAntiEffector: true, range: 2 }),
+    entry('antiFar', 3, 0, { isAntiEffector: true, range: 2 }),
+  ];
+  var reaches = computeReaches(entries);
+  var result = simulate(entries, reaches, 'trigger');
+
+  expect(result.passes[0].effects.map((e) => e.to.placement.id).sort()).toEqual(['antiFar', 'antiNear', 'plain']);
+
+  var triggerDeactivation = result.passes[1].effects.find((e) => e.to.placement.id === 'trigger');
+  expect(triggerDeactivation.kind).toBe('anti-effector');
+  expect(triggerDeactivation.becameActive).toBe(false);
+  expect(triggerDeactivation.edges.map((e) => e.from.placement.id).sort()).toEqual(['antiFar', 'antiNear']);
+
+  // plain, meanwhile, is a genuine conflict (not a same-kind merge): it's
+  // reached by trigger (effector, distance 1) and antiNear (anti-effector,
+  // distance 2) — different kinds, so the farther one (antiNear) overrides
+  // and solely takes credit, deactivating it.
+  var plainDeactivation = result.passes[1].effects.find((e) => e.to.placement.id === 'plain');
+  expect(plainDeactivation.kind).toBe('anti-effector');
+  expect(plainDeactivation.edges.map((e) => e.from.placement.id)).toEqual(['antiNear']);
+  expect(result.active.plain).toBe(false);
+
+  // antiNear itself is tied every pass it's contested (trigger, effector,
+  // distance 1 vs. antiFar, anti-effector, distance 1) until trigger drops
+  // out on pass 2 — only then does antiFar's now-uncontested reach resolve
+  // it, on the next pass.
+  expect(result.active.antiNear).toBe(false);
+  expect(result.active.antiFar).toBe(false);
+});

@@ -49,16 +49,23 @@
   // a later pass.
   //
   // Within one pass, all of a target's active-sourced reaches fire
-  // together: they're grouped by distance (closest first), and a farther
-  // group always overrides a closer one's decision, since it's acting on
-  // top of it — distance only breaks ties, it doesn't award the win to the
-  // closer source. A group that mixes both kinds at the exact same distance
-  // cancels itself out (effector and anti-effector arriving simultaneously
-  // do nothing) and simply passes through whatever the closer groups had
-  // already decided, rather than overriding it. Capped at `opts.maxPasses`
-  // (default entries.length + 1) so a cyclic activate/deactivate chain
-  // can't loop forever — `stabilized: false` in the result means the cap
-  // was hit while things were still changing.
+  // together: they're grouped by distance (closest first) and swept in
+  // that order. Distance only matters where two *opposing* kinds actually
+  // conflict — a farther group of the opposite kind overrides a closer
+  // one's decision, since it's acting on top of it, discarding that closer
+  // decision entirely (it's been superseded, not reinforced). A farther
+  // group of the *same* kind as the current decision isn't a conflict at
+  // all, so it doesn't override anything — it just joins it, credited
+  // alongside whatever closer same-kind sources already decided this
+  // (e.g. two different anti-effectors at two different distances both
+  // deactivating the same target both show up as having done so). A group
+  // that mixes both kinds at the exact same distance cancels itself out
+  // (effector and anti-effector arriving simultaneously do nothing) and
+  // simply passes through whatever the closer groups had already decided,
+  // rather than overriding it. Capped at `opts.maxPasses` (default
+  // entries.length + 1) so a cyclic activate/deactivate chain can't loop
+  // forever — `stabilized: false` in the result means the cap was hit
+  // while things were still changing.
   function resolveTarget(edgesToTarget, before, targetId) {
     var byDistance = {};
     var distances = [];
@@ -68,21 +75,26 @@
     });
     distances.sort(function (a, b) { return a - b; });
 
-    var winner = null;
+    var kind = null;
+    var credited = [];
     distances.forEach(function (d) {
       var group = byDistance[d];
       var kinds = {};
       group.forEach(function (r) { kinds[r.kind] = true; });
-      // A group with only one kind present decisively sets the outcome,
-      // farther groups overriding closer ones; a mixed group at that
-      // distance cancels out and leaves the prior decision untouched.
-      if (Object.keys(kinds).length === 1) winner = group;
+      var kindNames = Object.keys(kinds);
+      if (kindNames.length !== 1) return; // mixed at this distance: cancels out, prior decision (if any) stands
+      if (kindNames[0] === kind) {
+        credited = credited.concat(group); // same kind as the running decision: joins it, doesn't override it
+      } else {
+        kind = kindNames[0]; // a new (or first) kind decisively takes over from here
+        credited = group.slice();
+      }
     });
-    if (!winner) return null;
+    if (!kind) return null;
 
-    var nextActive = winner[0].kind === 'effector';
+    var nextActive = kind === 'effector';
     if (before[targetId] === nextActive) return null;
-    return { edges: winner, kind: winner[0].kind, distance: winner[0].distance, becameActive: nextActive };
+    return { edges: credited, kind: kind, becameActive: nextActive };
   }
 
   function simulate(entries, reaches, startPlacementId, opts) {
@@ -114,7 +126,6 @@
           to: resolution.edges[0].to,
           edges: resolution.edges,
           kind: resolution.kind,
-          distance: resolution.distance,
           becameActive: resolution.becameActive,
         });
       });

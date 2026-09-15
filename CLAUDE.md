@@ -104,10 +104,16 @@ they default to `library_test` on localhost if no env vars are set.
   `arrays.html`'s Simulations panel only offers one simulation per
   triggerable placement in the array. Within a pass, all of a target's
   active-sourced reaches fire at once, grouped by distance closest-first;
-  distance only breaks ties between a group and the next — a *farther*
-  group always overrides a closer one (it's acting on top of it), and a
-  group that mixes both kinds at the exact same distance cancels out and
-  changes nothing, leaving whatever the closer groups had already decided.
+  distance only matters where two *opposing* kinds actually conflict — a
+  farther group of the opposite kind overrides a closer one's decision
+  entirely (it's superseded, not reinforced), and a group that mixes both
+  kinds at the exact same distance cancels out and changes nothing,
+  leaving whatever the closer groups had already decided. A farther group
+  of the *same* kind as the current decision isn't a conflict, so it
+  doesn't override — it joins it, credited alongside every other same-kind
+  source that already decided this (e.g. two different anti-effectors at
+  two different distances both deactivating one target both show up as
+  having done so, in the Simulations panel's per-pass log).
 - `tests/helpers/testDb.js` — the shared MySQL pool integration tests use,
   reset with `TRUNCATE` in each test's `beforeEach` (see
   `vitest.config.js`'s `fileParallelism: false` — test files run
