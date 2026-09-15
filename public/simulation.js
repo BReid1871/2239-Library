@@ -42,20 +42,49 @@
     return reaches;
   }
 
-  // Simulates a person triggering `startPlacementId`: everything else starts
-  // inactive, then repeatedly applies effects from currently-active
-  // effector/anti-effector placements (effector activates its target,
-  // anti-effector deactivates it) until nothing changes, so a
-  // newly-activated effector can reach further placements on a later pass.
-  // Within one pass, a target reached by more than one active source is
-  // resolved by the closest source (reaches are pre-sorted that way, with
-  // the same distance/id tie-break as their `order`) — later, farther
-  // reaches to an already-decided target this pass are superseded, not
-  // applied on top of it; they can still fire on a later pass if things
-  // change again. Capped at `opts.maxPasses` (default entries.length + 1)
-  // so a cyclic activate/deactivate chain can't loop forever —
-  // `stabilized: false` in the result means the cap was hit while things
-  // were still changing.
+  // Simulates a person triggering `startPlacementId`: it (and everything in
+  // its reach) turns on as the first pass, then every effector/anti-effector
+  // that's now active fires at once on a later pass, and so on until nothing
+  // changes — so a newly-activated effector can reach further placements on
+  // a later pass.
+  //
+  // Within one pass, all of a target's active-sourced reaches fire
+  // together: they're grouped by distance (closest first), and a farther
+  // group always overrides a closer one's decision, since it's acting on
+  // top of it — distance only breaks ties, it doesn't award the win to the
+  // closer source. A group that mixes both kinds at the exact same distance
+  // cancels itself out (effector and anti-effector arriving simultaneously
+  // do nothing) and simply passes through whatever the closer groups had
+  // already decided, rather than overriding it. Capped at `opts.maxPasses`
+  // (default entries.length + 1) so a cyclic activate/deactivate chain
+  // can't loop forever — `stabilized: false` in the result means the cap
+  // was hit while things were still changing.
+  function resolveTarget(edgesToTarget, before, targetId) {
+    var byDistance = {};
+    var distances = [];
+    edgesToTarget.forEach(function (r) {
+      if (!byDistance[r.distance]) { byDistance[r.distance] = []; distances.push(r.distance); }
+      byDistance[r.distance].push(r);
+    });
+    distances.sort(function (a, b) { return a - b; });
+
+    var winner = null;
+    distances.forEach(function (d) {
+      var group = byDistance[d];
+      var kinds = {};
+      group.forEach(function (r) { kinds[r.kind] = true; });
+      // A group with only one kind present decisively sets the outcome,
+      // farther groups overriding closer ones; a mixed group at that
+      // distance cancels out and leaves the prior decision untouched.
+      if (Object.keys(kinds).length === 1) winner = group;
+    });
+    if (!winner) return null;
+
+    var nextActive = winner[0].kind === 'effector';
+    if (before[targetId] === nextActive) return null;
+    return { edges: winner, kind: winner[0].kind, distance: winner[0].distance, becameActive: nextActive };
+  }
+
   function simulate(entries, reaches, startPlacementId, opts) {
     var maxPasses = (opts && opts.maxPasses) || entries.length + 1;
     var active = {};
@@ -68,18 +97,28 @@
     for (var pass = 1; pass <= maxPasses; pass++) {
       var before = Object.assign({}, active);
       var edges = reaches.filter(function (r) { return before[r.from.placement.id]; });
-      var decided = {};
-      var effects = [];
+      var byTarget = {};
+      var targetIds = [];
       edges.forEach(function (r) {
         var targetId = r.to.placement.id;
-        if (decided[targetId]) return;
-        decided[targetId] = true;
-        var nextActive = r.kind === 'effector';
-        if (before[targetId] !== nextActive) {
-          effects.push({ from: r.from, to: r.to, kind: r.kind, distance: r.distance, becameActive: nextActive });
-        }
-        active[targetId] = nextActive;
+        if (!byTarget[targetId]) { byTarget[targetId] = []; targetIds.push(targetId); }
+        byTarget[targetId].push(r);
       });
+
+      var effects = [];
+      targetIds.forEach(function (targetId) {
+        var resolution = resolveTarget(byTarget[targetId], before, targetId);
+        if (!resolution) return;
+        active[targetId] = resolution.becameActive;
+        effects.push({
+          to: resolution.edges[0].to,
+          edges: resolution.edges,
+          kind: resolution.kind,
+          distance: resolution.distance,
+          becameActive: resolution.becameActive,
+        });
+      });
+
       if (effects.length === 0) break;
       passes.push({ pass: pass, effects: effects });
       if (pass === maxPasses) stabilized = false;

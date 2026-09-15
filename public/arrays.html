@@ -567,7 +567,8 @@ function renderSimulations(arr, placements, reaches) {
           pass.effects.forEach(function(effect) {
             var li = document.createElement('li');
             var verb = effect.kind === 'anti-effector' ? 'deactivates' : 'activates';
-            li.textContent = effect.from.ritual.name + ' ' + verb + ' ' + effect.to.ritual.name;
+            var fromNames = effect.edges.map(function(e) { return e.from.ritual.name; }).join(', ');
+            li.textContent = fromNames + ' ' + verb + ' ' + effect.to.ritual.name;
             passList.appendChild(li);
           });
           body.appendChild(passList);
