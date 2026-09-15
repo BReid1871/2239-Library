@@ -86,3 +86,29 @@ test('array reach lines only originate from placements marked as effectors, and 
 
   await request.delete(`/api/arrays/${arr.id}`);
 });
+
+test('Ctrl+scroll zooms the array board; a plain scroll does not', async ({ page, request }) => {
+  const arr = await (await request.post('/api/arrays', { data: { name: 'E2E Zoom Array', radius: 5, placements: [] } })).json();
+
+  await page.goto('/arrays.html');
+  await page.locator('.array-card', { hasText: 'E2E Zoom Array' }).click();
+  await page.waitForSelector('#hex-board-svg');
+
+  const zoomLabel = page.locator('#zoom-val');
+  await expect(zoomLabel).toHaveText('100%');
+
+  const box = await page.locator('.hex-board-wrap').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+
+  await page.keyboard.down('Control');
+  await page.mouse.wheel(0, -200);
+  await page.keyboard.up('Control');
+  await expect(zoomLabel).not.toHaveText('100%');
+  const zoomedIn = await zoomLabel.textContent();
+  expect(parseInt(zoomedIn, 10)).toBeGreaterThan(100);
+
+  await page.mouse.wheel(0, 40);
+  await expect(zoomLabel).toHaveText(zoomedIn);
+
+  await request.delete(`/api/arrays/${arr.id}`);
+});
