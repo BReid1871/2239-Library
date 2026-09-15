@@ -16,9 +16,11 @@
 .hex-cell { fill: var(--bg); stroke: var(--border2); stroke-width: 1; cursor: pointer; transition: fill 0.1s, stroke 0.1s; }
 .hex-cell:hover { stroke: var(--accent); }
 .hex-cell.occupied { cursor: default; }
-.hex-reach-line { stroke: var(--accent); stroke-width: 1.5; opacity: 0.45; pointer-events: none; }
+.hex-reach-line { stroke: var(--accent); stroke-width: 1.5; opacity: 0.55; pointer-events: none; }
+.hex-arrowhead { fill: var(--accent); opacity: 0.55; }
 .hex-order-badge circle { fill: var(--accent); stroke: var(--bg2); stroke-width: 1.5; }
 .hex-order-badge text { fill: #fff; font-size: 9px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }
+.effector-tag { font-size: 10px; padding: 1px 8px; }
 .placement-list { width: 210px; flex-shrink: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .placement-item { display: flex; align-items: flex-start; gap: 6px; padding: 7px 9px; border-radius: var(--radius); background: var(--bg2); border: 0.5px solid var(--border); }
 .placement-item-body { flex: 1; min-width: 0; }
@@ -147,6 +149,19 @@ function closeRitualPreview() {
 var currentArrayId = null;
 var HEX_PIXEL_SIZE = 26;
 
+// Reach-line drawing tuning (all in the board's unscaled pixel space, so
+// they scale along with zoom): how far apart to draw two opposite-direction
+// arrows between a mutual pair, and how far to pull each end back from a
+// hex's center so a line/arrowhead doesn't dive into the hex fill.
+var REACH_OFFSET_PX = 5;
+var REACH_START_PAD = 12;
+var REACH_END_PAD = 20;
+
+var MIN_ZOOM = 0.5;
+var MAX_ZOOM = 2.5;
+var ZOOM_STEP = 0.25;
+var zoomLevel = 1;
+
 function getArray(id) {
   for (var i = 0; i < arrays.length; i++) { if (arrays[i].id === id) return arrays[i]; }
   return null;
@@ -203,6 +218,7 @@ function openArray(id) {
   var arr = getArray(id);
   if (!arr) return;
   currentArrayId = id;
+  zoomLevel = 1;
   renderArrayList();
   renderArrayEditor(arr);
 }
@@ -243,12 +259,16 @@ function occupiedHexMap(placements) {
   return map;
 }
 
-// Every directed "reach": ritual A's effect touches ritual B's anchor
-// within A's range. Sorted closest-first — that ranking IS the order
-// effects occur in, which is what the numbered overlay shows.
+// Every directed "reach": effector ritual A's effect touches ritual B's
+// anchor within A's range. Only placements marked as effectors (see the
+// per-placement toggle in the sidebar) originate a reach — most rituals in
+// an array just sit there and can be reached, but don't reach out
+// themselves. Sorted closest-first — that ranking IS the order effects
+// occur in, which is what the numbered overlay shows.
 function computeReaches(placements) {
   var reaches = [];
-  placements.forEach(function(a) {
+  var effectors = placements.filter(function(p) { return !!p.placement.isEffector; });
+  effectors.forEach(function(a) {
     placements.forEach(function(b) {
       if (a === b) return;
       var dist = Hex.hexDistance(a.anchor, b.anchor);
@@ -271,7 +291,7 @@ function svgEl(tag, attrs) {
   return el;
 }
 
-function renderHexBoard(arr, placements) {
+function renderHexBoard(arr, placements, zoom) {
   var boardHexes = Hex.hexDisk({ q: 0, r: 0 }, arr.radius);
   var occupied = occupiedHexMap(placements);
 
@@ -284,6 +304,15 @@ function renderHexBoard(arr, placements) {
   var width = maxX - minX, height = maxY - minY;
 
   var svg = svgEl('svg', { width: width, height: height, viewBox: '0 0 ' + width + ' ' + height });
+
+  var defs = svgEl('defs', {});
+  var arrowMarker = svgEl('marker', {
+    id: 'reach-arrowhead', viewBox: '0 0 10 10', refX: '8', refY: '5',
+    markerWidth: '6', markerHeight: '6', orient: 'auto-start-reverse',
+  });
+  arrowMarker.appendChild(svgEl('path', { d: 'M0,0 L10,5 L0,10 Z', class: 'hex-arrowhead' }));
+  defs.appendChild(arrowMarker);
+  svg.appendChild(defs);
 
   pts.forEach(function(p) {
     var cx = p.px.x - minX, cy = p.px.y - minY;
@@ -310,18 +339,35 @@ function renderHexBoard(arr, placements) {
     svg.appendChild(poly);
   });
 
+  // Reaches are directional (drawn with an arrowhead pointing at the
+  // target). When a pair reaches each other both ways, the two arrows are
+  // offset to either side of the centerline instead of drawn on top of each
+  // other — otherwise they'd fully overlap and hide each other's order
+  // badge, which is why badges used to appear to "skip" numbers.
   var reaches = computeReaches(placements);
+  var reachKeys = {};
+  reaches.forEach(function(reach) {
+    reachKeys[reach.from.placement.id + '>' + reach.to.placement.id] = true;
+  });
+
   reaches.forEach(function(reach) {
     var fromPx = Hex.axialToPixel(reach.from.anchor, HEX_PIXEL_SIZE);
     var toPx = Hex.axialToPixel(reach.to.anchor, HEX_PIXEL_SIZE);
     var x1 = fromPx.x - minX, y1 = fromPx.y - minY, x2 = toPx.x - minX, y2 = toPx.y - minY;
-    var line = svgEl('line', { x1: x1, y1: y1, x2: x2, y2: y2, class: 'hex-reach-line' });
+
+    var isMutual = !!reachKeys[reach.to.placement.id + '>' + reach.from.placement.id];
+    var seg = isMutual ? Hex.offsetSegment(x1, y1, x2, y2, REACH_OFFSET_PX) : { x1: x1, y1: y1, x2: x2, y2: y2 };
+    seg = Hex.shortenSegment(seg.x1, seg.y1, seg.x2, seg.y2, REACH_START_PAD, REACH_END_PAD);
+    reach.line = seg;
+
+    var line = svgEl('line', {
+      x1: seg.x1, y1: seg.y1, x2: seg.x2, y2: seg.y2,
+      class: 'hex-reach-line', 'marker-end': 'url(#reach-arrowhead)',
+    });
     svg.appendChild(line);
   });
   reaches.forEach(function(reach) {
-    var fromPx = Hex.axialToPixel(reach.from.anchor, HEX_PIXEL_SIZE);
-    var toPx = Hex.axialToPixel(reach.to.anchor, HEX_PIXEL_SIZE);
-    var mx = (fromPx.x + toPx.x) / 2 - minX, my = (fromPx.y + toPx.y) / 2 - minY;
+    var mx = (reach.line.x1 + reach.line.x2) / 2, my = (reach.line.y1 + reach.line.y2) / 2;
     var g = svgEl('g', { class: 'hex-order-badge' });
     g.appendChild(svgEl('circle', { cx: mx, cy: my, r: 7.5 }));
     var text = svgEl('text', { x: mx, y: my });
@@ -333,7 +379,14 @@ function renderHexBoard(arr, placements) {
     svg.appendChild(g);
   });
 
-  return svg;
+  // Zoom is applied as a CSS transform on the (unscaled) svg, wrapped in a
+  // container sized to the scaled dimensions so .hex-board-wrap's scrollbars
+  // reflect the zoomed-in size.
+  var container = document.createElement('div');
+  container.style.cssText = 'position:relative;width:' + (width * zoom) + 'px;height:' + (height * zoom) + 'px;';
+  svg.style.cssText = 'position:absolute;top:0;left:0;transform-origin:0 0;transform:scale(' + zoom + ');';
+  container.appendChild(svg);
+  return container;
 }
 
 function renderPlacementList(arr, placements) {
@@ -355,7 +408,22 @@ function renderPlacementList(arr, placements) {
     var name = document.createElement('div'); name.className = 'placement-item-name'; name.textContent = entry.ritual.name;
     var meta = document.createElement('div'); meta.className = 'placement-item-meta';
     meta.textContent = 'Range ' + entry.range;
-    body.appendChild(name); body.appendChild(meta);
+
+    var metaRow = document.createElement('div');
+    metaRow.style.cssText = 'display:flex;align-items:center;gap:6px;';
+    var effectorTag = document.createElement('span');
+    effectorTag.className = 'tag effector-tag' + (entry.placement.isEffector ? ' on' : '');
+    effectorTag.textContent = 'Effector';
+    effectorTag.title = 'Only effectors emit reach lines to other rituals.';
+    effectorTag.onclick = function() {
+      entry.placement.isEffector = !entry.placement.isEffector;
+      renderArrayEditor(arr);
+      renderArrayList();
+      saveArray(arr);
+    };
+    metaRow.appendChild(meta); metaRow.appendChild(effectorTag);
+
+    body.appendChild(name); body.appendChild(metaRow);
 
     var sizeRow = document.createElement('div');
     sizeRow.className = 'placement-item-size';
@@ -417,6 +485,15 @@ function renderArrayEditor(arr) {
   dec.onclick = function() { changeRadius(arr, -1); };
   inc.onclick = function() { changeRadius(arr, 1); };
 
+  var zoomLabel = document.createElement('span');
+  zoomLabel.style.cssText = 'font-size:11px;color:var(--text3);flex-shrink:0;margin-left:8px;';
+  zoomLabel.textContent = 'Zoom:';
+  var zoomDec = document.createElement('button'); zoomDec.textContent = '−'; zoomDec.style.cssText = 'padding:2px 6px;font-size:12px;';
+  var zoomVal = document.createElement('span'); zoomVal.style.cssText = 'font-size:12px;min-width:38px;text-align:center;'; zoomVal.textContent = Math.round(zoomLevel * 100) + '%';
+  var zoomInc = document.createElement('button'); zoomInc.textContent = '+'; zoomInc.style.cssText = 'padding:2px 6px;font-size:12px;';
+  zoomDec.onclick = function() { changeZoom(arr, -ZOOM_STEP); };
+  zoomInc.onclick = function() { changeZoom(arr, ZOOM_STEP); };
+
   var delBtn = document.createElement('button');
   delBtn.className = 'danger';
   delBtn.textContent = 'Delete';
@@ -428,6 +505,10 @@ function renderArrayEditor(arr) {
   topBar.appendChild(dec);
   topBar.appendChild(radiusVal);
   topBar.appendChild(inc);
+  topBar.appendChild(zoomLabel);
+  topBar.appendChild(zoomDec);
+  topBar.appendChild(zoomVal);
+  topBar.appendChild(zoomInc);
   topBar.appendChild(delBtn);
 
   // Board + placement list, side by side. The numbered badges on the board
@@ -439,7 +520,7 @@ function renderArrayEditor(arr) {
   var placements = livePlacements(arr);
   var boardWrap = document.createElement('div');
   boardWrap.className = 'hex-board-wrap';
-  boardWrap.appendChild(renderHexBoard(arr, placements));
+  boardWrap.appendChild(renderHexBoard(arr, placements, zoomLevel));
 
   row.appendChild(boardWrap);
   row.appendChild(renderPlacementList(arr, placements));
@@ -465,6 +546,15 @@ function changeRadius(arr, delta) {
   renderArrayEditor(arr);
   renderArrayList();
   saveArray(arr);
+}
+
+// Zoom is a view preference, not part of the array's saved data — it isn't
+// persisted, and resets to 100% whenever a different array is opened.
+function changeZoom(arr, delta) {
+  var n = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.round((zoomLevel + delta) * 100) / 100));
+  if (n === zoomLevel) return;
+  zoomLevel = n;
+  renderArrayEditor(arr);
 }
 
 // Grows or shrinks one placement's size in place. Growing is validated the
@@ -615,7 +705,7 @@ function attemptPlacement(arr, hex, ritual, size) {
     return;
   }
 
-  arr.placements.push({ id: crypto.randomUUID(), ritualId: ritual.id, q: hex.q, r: hex.r, size: size });
+  arr.placements.push({ id: crypto.randomUUID(), ritualId: ritual.id, q: hex.q, r: hex.r, size: size, isEffector: false });
   closePicker();
   renderArrayEditor(arr);
   renderArrayList();
