@@ -102,7 +102,12 @@ they default to `library_test` on localhost if no env vars are set.
   gates who can *start* a simulation — a non-triggerable ritual can still
   be activated by an effector, just not directly by a person — so
   `arrays.html`'s Simulations panel only offers one simulation per
-  triggerable placement in the array.
+  triggerable placement in the array. Within a pass, all of a target's
+  active-sourced reaches fire at once, grouped by distance closest-first;
+  distance only breaks ties between a group and the next — a *farther*
+  group always overrides a closer one (it's acting on top of it), and a
+  group that mixes both kinds at the exact same distance cancels out and
+  changes nothing, leaving whatever the closer groups had already decided.
 - `tests/helpers/testDb.js` — the shared MySQL pool integration tests use,
   reset with `TRUNCATE` in each test's `beforeEach` (see
   `vitest.config.js`'s `fileParallelism: false` — test files run
