@@ -1,6 +1,6 @@
 const mysql = require('mysql2/promise');
 
-const TABLES = ['rituals', 'notes', 'custom_components', 'arrays'];
+const TABLES = ['rituals', 'notes', 'custom_components', 'arrays', 'array_history'];
 
 const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS rituals (
@@ -45,6 +45,20 @@ const SCHEMA_STATEMENTS = [
     created_at VARCHAR(32) NOT NULL,
     updated_at VARCHAR(32) NOT NULL
   )`,
+  // Undo/redo history for arrays: one snapshot per edit, keyed by a
+  // per-array sequence number. `arrays.history_seq` (added below) points at
+  // which snapshot is "current" — undo/redo just move that pointer and copy
+  // the snapshot's state back onto the array row; a new edit after an undo
+  // deletes any snapshots ahead of the pointer (the old redo branch).
+  `CREATE TABLE IF NOT EXISTS array_history (
+    array_id VARCHAR(36) NOT NULL,
+    seq INT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    radius INT NOT NULL,
+    placements JSON NOT NULL,
+    created_at VARCHAR(32) NOT NULL,
+    PRIMARY KEY (array_id, seq)
+  )`,
 ];
 
 // Real MySQL (unlike MariaDB) never supported ADD/DROP COLUMN ... IF
@@ -60,6 +74,7 @@ const MIGRATIONS = [
   { table: 'arrays', column: 'rows', kind: 'drop', ddl: 'ALTER TABLE arrays DROP COLUMN `rows`' },
   { table: 'arrays', column: 'cols', kind: 'drop', ddl: 'ALTER TABLE arrays DROP COLUMN cols' },
   { table: 'arrays', column: 'cells', kind: 'drop', ddl: 'ALTER TABLE arrays DROP COLUMN cells' },
+  { table: 'arrays', column: 'history_seq', kind: 'add', ddl: 'ALTER TABLE arrays ADD COLUMN history_seq INT NOT NULL DEFAULT 0' },
 ];
 
 function resolveConnectionConfig() {

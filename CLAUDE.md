@@ -75,8 +75,7 @@ they default to `library_test` on localhost if no env vars are set.
 - `server/db.js` — MySQL connection pool (`mysql2/promise`), schema DDL
   (`rituals`, `notes`, `custom_components`, `arrays`), and a
   `truncateAll` helper used by tests to reset state between runs.
-- `server/routes/` — one Express router per resource, plus `data.js` for
-  `GET /api/export` / `POST /api/import`.
+- `server/routes/` — one Express router per resource.
 - `server/lib/rituals.js` — shared duplicate-ritual check.
 - `public/index.html` — the frontend (single-page app, no build step);
   talks to the API via `fetch()`, no client-side storage.

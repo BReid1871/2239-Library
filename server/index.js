@@ -5,7 +5,6 @@ const { ritualsRouter } = require('./routes/rituals');
 const { notesRouter } = require('./routes/notes');
 const { componentsRouter } = require('./routes/components');
 const { arraysRouter } = require('./routes/arrays');
-const { dataRouter } = require('./routes/data');
 const { asyncHandler } = require('./lib/asyncHandler');
 
 function createApp(db) {
@@ -23,7 +22,6 @@ function createApp(db) {
   app.use('/api/notes', notesRouter(db));
   app.use('/api/components', componentsRouter(db));
   app.use('/api/arrays', arraysRouter(db));
-  app.use('/api', dataRouter(db));
 
   // Catches errors passed to next() by asyncHandler — without this,
   // Express 4's default error handler still applies, but this gives a

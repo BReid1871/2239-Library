@@ -1,7 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
-const { getTier } = require('../../public/reference-data');
-const { ritualsMatch } = require('../lib/rituals');
+const { getTier, IGNORES } = require('../../public/reference-data');
+const { ritualsMatch, findRuneConflict } = require('../lib/rituals');
 const { asyncHandler } = require('../lib/asyncHandler');
 
 function rowToRitual(row) {
@@ -21,7 +21,19 @@ function ritualsRouter(db) {
   const router = express.Router();
 
   router.get('/', asyncHandler(async (req, res) => {
-    const [rows] = await db.query('SELECT * FROM rituals ORDER BY created_at DESC');
+    const q = (req.query.q || '').trim();
+    if (!q) {
+      const [rows] = await db.query('SELECT * FROM rituals ORDER BY created_at DESC');
+      return res.json(rows.map(rowToRitual));
+    }
+    const like = `%${q}%`;
+    const [rows] = await db.query(
+      `SELECT * FROM rituals
+       WHERE name LIKE ? OR purpose LIKE ? OR primary_rune LIKE ? OR effect LIKE ?
+          OR JSON_SEARCH(subs, 'one', ?) IS NOT NULL
+       ORDER BY created_at DESC`,
+      [like, like, like, like, like]
+    );
     res.json(rows.map(rowToRitual));
   }));
 
@@ -31,6 +43,11 @@ function ritualsRouter(db) {
     if (!purpose) return res.status(400).json({ error: 'Please select a purpose.' });
     if (!primary) return res.status(400).json({ error: 'Please select a primary rune.' });
     if (!effect || !String(effect).trim()) return res.status(400).json({ error: 'Please describe the effect.' });
+
+    const conflict = findRuneConflict(primary, subs || [], IGNORES);
+    if (conflict) {
+      return res.status(400).json({ error: `${conflict.a} and ${conflict.b} ignore each other and cannot be combined in the same ritual.` });
+    }
 
     const candidate = { purpose, primary, subs: subs || [] };
     const [existingRows] = await db.query('SELECT * FROM rituals');
@@ -66,6 +83,11 @@ function ritualsRouter(db) {
     if (!purpose) return res.status(400).json({ error: 'Please select a purpose.' });
     if (!primary) return res.status(400).json({ error: 'Please select a primary rune.' });
     if (!effect || !String(effect).trim()) return res.status(400).json({ error: 'Please describe the effect.' });
+
+    const conflict = findRuneConflict(primary, subs || [], IGNORES);
+    if (conflict) {
+      return res.status(400).json({ error: `${conflict.a} and ${conflict.b} ignore each other and cannot be combined in the same ritual.` });
+    }
 
     const candidate = { purpose, primary, subs: subs || [] };
     const [otherRows] = await db.query('SELECT * FROM rituals WHERE id != ?', [req.params.id]);
