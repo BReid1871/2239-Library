@@ -79,6 +79,19 @@
 .comp-form-grid .full { grid-column: 1 / -1; }
 
 #form-msg { font-size: 13px; margin-top: 0.75rem; min-height: 1.4em; }
+
+/* Tags (rituals) */
+.tag-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px 3px 10px; border-radius: 99px; font-size: 12px; background: var(--bg2); border: 0.5px solid var(--border2); color: var(--text2); }
+.tag-chip-remove { border: none; background: none; color: var(--text3); cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; }
+.tag-chip-remove:hover { color: var(--text); }
+.tag-input-row { display: flex; gap: 6px; margin-top: 6px; }
+.tag-input-row input { flex: 1; }
+
+/* Components used (rituals) */
+.comp-group-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0 4px; }
+.comp-group-label:first-child { margin-top: 6px; }
+.used-in-note { font-size: 10px; color: var(--text3); margin-top: 4px; }
+.used-in-note a { color: var(--accent); cursor: pointer; }
 </style>
 </head>
 <body>
@@ -118,6 +131,10 @@
       <div class="lib-filter-label" onclick="toggleFilterSection('rune-filters')">Primary rune <span id="rune-filters-arrow">&#9662;</span></div>
       <div class="lib-filters" id="rune-filters"></div>
     </div>
+    <div class="lib-filter-section">
+      <div class="lib-filter-label" onclick="toggleFilterSection('tag-filters')">Tags <span id="tag-filters-arrow">&#9662;</span></div>
+      <div class="lib-filters" id="tag-filters"></div>
+    </div>
     <div class="ritual-list" id="ritual-list"></div>
     <div class="lib-count" id="lib-count-foot"></div>
   </aside>
@@ -150,8 +167,18 @@
       <label class="form-label">Subsidiary runes <span class="sub-note" id="f-sub-note">(0 — Low tier)</span></label>
       <div class="pill-group" id="f-subs"></div>
 
+      <label class="form-label">Components used</label>
+      <div id="f-components"></div>
+
       <label class="form-label">Effect <span class="required-star">*</span></label>
       <textarea id="f-effect" placeholder="Describe what the ritual does…"></textarea>
+
+      <label class="form-label">Tags</label>
+      <div class="pill-group" id="f-tags"></div>
+      <div class="tag-input-row">
+        <input type="text" id="f-tag-input" placeholder="Add a tag and press Enter…" onkeydown="if(event.key==='Enter'){event.preventDefault();addFormTag();}">
+        <button onclick="addFormTag()">Add</button>
+      </div>
 
       <div class="btn-row">
         <button class="primary" id="form-save-btn" onclick="saveRitual()">Save to library</button>
@@ -251,11 +278,14 @@ async function deleteEntry(id) {
 
 var fPrimary = null;
 var fSubs = {};
+var fTags = {};
+var fComponents = {}; // keyed by rune + '|' + name -> {rune, name}
 var fEditId = null;
 var currentDetailId = null;
 var libFilter = null;      // tier
 var libPurposeFilter = null;
 var libRuneFilter = null;
+var libTagFilters = {};
 var libSortDir = 'asc';
 var refFilter = null; // selected rune name or null
 var detailTabVisible = false;
@@ -336,6 +366,28 @@ function renderLibraryFilters() {
     chip.onclick = function() { libRuneFilter = libRuneFilter === r.name ? null : r.name; renderLibrary(); };
     runeEl.appendChild(chip);
   });
+
+  // Tags
+  var tagEl = document.getElementById('tag-filters');
+  tagEl.innerHTML = '';
+  var allTags = {};
+  library.forEach(function(r) { (r.tags || []).forEach(function(t) { allTags[t] = true; }); });
+  var tagNames = Object.keys(allTags).sort();
+  if (tagNames.length === 0) {
+    tagEl.innerHTML = '<div style="font-size:11px;color:var(--text3);">No tags yet.</div>';
+  } else {
+    tagNames.forEach(function(t) {
+      var chip = document.createElement('span');
+      chip.className = 'filter-chip' + (libTagFilters[t] ? ' active' : '');
+      chip.textContent = t;
+      if (libTagFilters[t]) chip.style.background = 'var(--accent)';
+      chip.onclick = function() {
+        if (libTagFilters[t]) delete libTagFilters[t]; else libTagFilters[t] = true;
+        renderLibrary();
+      };
+      tagEl.appendChild(chip);
+    });
+  }
 }
 
 function renderLibrary() {
@@ -344,6 +396,13 @@ function renderLibrary() {
   if (libFilter)        items = items.filter(function(r) { return r.tier === libFilter; });
   if (libPurposeFilter) items = items.filter(function(r) { return r.purpose === libPurposeFilter; });
   if (libRuneFilter)    items = items.filter(function(r) { return r.primary === libRuneFilter; });
+  var activeTagFilters = Object.keys(libTagFilters);
+  if (activeTagFilters.length > 0) {
+    items = items.filter(function(r) {
+      var tags = r.tags || [];
+      return activeTagFilters.every(function(t) { return tags.indexOf(t) >= 0; });
+    });
+  }
   // Sort
   var sortBy = document.getElementById('lib-sort-by') ? document.getElementById('lib-sort-by').value : 'date';
   var TIER_ORDER = {Low:0, Mid:1, High:2, Adept:3};
@@ -361,7 +420,8 @@ function renderLibrary() {
     return (r.name||'').toLowerCase().indexOf(q) >= 0 ||
            (r.purpose||'').toLowerCase().indexOf(q) >= 0 ||
            (r.primary||'').toLowerCase().indexOf(q) >= 0 ||
-           (r.effect||'').toLowerCase().indexOf(q) >= 0;
+           (r.effect||'').toLowerCase().indexOf(q) >= 0 ||
+           (r.tags||[]).some(function(t) { return t.toLowerCase().indexOf(q) >= 0; });
   });
   var list = document.getElementById('ritual-list');
   list.innerHTML = '';
@@ -431,6 +491,26 @@ function openDetail(id) {
   html += '<div class="rune-row">' + chipHTML + '</div>';
   html += '<hr class="hdivider">';
   html += '<div class="fl">Effect</div><div class="fv">' + esc(r.effect || '') + '</div>';
+
+  var comps = r.components || [];
+  if (comps.length > 0) {
+    html += '<div class="fl">Components</div><div class="fv" style="display:flex;flex-wrap:wrap;gap:6px;">';
+    html += comps.map(function(c) {
+      var cr = getRune(c.rune);
+      var full = allComponents().filter(function(x) { return x.rune === c.rune && x.name === c.name; })[0];
+      var desc = full ? esc(full.desc) : '';
+      return '<span class="rune-chip" title="' + desc + '"><span class="dot" style="background:' + (cr ? cr.color : '#ccc') + '"></span>' + esc(c.name) + '</span>';
+    }).join('');
+    html += '</div>';
+  }
+
+  var tags = r.tags || [];
+  if (tags.length > 0) {
+    html += '<div class="fl">Tags</div><div class="fv" style="display:flex;flex-wrap:wrap;gap:6px;">';
+    html += tags.map(function(t) { return '<span class="badge" style="background:var(--bg2);color:var(--text2);border:0.5px solid var(--border)">' + esc(t) + '</span>'; }).join('');
+    html += '</div>';
+  }
+
   var d = new Date(r.createdAt);
   html += '<div style="margin-top:0.5rem;font-size:11px;color:var(--text3)">Added ' + d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}) + ' · ' + subs.length + ' subsidiary rune' + (subs.length !== 1 ? 's' : '') + '</div>';
 
@@ -468,8 +548,13 @@ function editEntry(id) {
   fPrimary = r.primary;
   fSubs = {};
   (r.subs || []).forEach(function(s) { fSubs[s] = true; });
+  fTags = {};
+  (r.tags || []).forEach(function(t) { fTags[t] = true; });
+  fComponents = {};
+  (r.components || []).forEach(function(c) { fComponents[c.rune + '|' + c.name] = c; });
   renderFormPrimary();
   renderFormSubs();
+  renderFormTags();
   document.getElementById('form-add-title').textContent = 'Edit Ritual';
   document.getElementById('form-add-sub').textContent = 'Update the details below and save.';
   document.getElementById('form-save-btn').textContent = 'Save changes';
@@ -523,6 +608,87 @@ function renderFormSubs() {
     };
     g.appendChild(el);
   });
+  pruneFormComponentsToActiveRunes();
+  renderFormComponents();
+}
+
+// ── Components used (per ritual) ────────────────────────────────────────────
+
+function activeFormRunes() {
+  if (!fPrimary) return [];
+  var ignored = IGNORES[fPrimary] || [];
+  var runes = [fPrimary];
+  Object.keys(fSubs).forEach(function(s) { if (ignored.indexOf(s) < 0) runes.push(s); });
+  return runes;
+}
+
+function pruneFormComponentsToActiveRunes() {
+  var active = activeFormRunes();
+  Object.keys(fComponents).forEach(function(key) {
+    if (active.indexOf(fComponents[key].rune) < 0) delete fComponents[key];
+  });
+}
+
+function renderFormComponents() {
+  var host = document.getElementById('f-components');
+  host.innerHTML = '';
+  var active = activeFormRunes();
+  if (active.length === 0) {
+    host.innerHTML = '<div style="font-size:11px;color:var(--text3);margin-top:4px;">Select a primary rune to choose components.</div>';
+    return;
+  }
+  active.forEach(function(runeName) {
+    var rune = getRune(runeName);
+    var comps = allComponents().filter(function(c) { return c.rune === runeName; });
+    if (comps.length === 0) return;
+    var label = document.createElement('div');
+    label.className = 'comp-group-label';
+    label.textContent = runeName;
+    if (rune) label.style.color = rune.color;
+    host.appendChild(label);
+    var group = document.createElement('div');
+    group.className = 'pill-group';
+    comps.forEach(function(c) {
+      var key = c.rune + '|' + c.name;
+      var el = document.createElement('span');
+      el.className = 'tag' + (fComponents[key] ? ' on' : '');
+      el.textContent = c.name;
+      el.title = c.desc;
+      el.onclick = function() {
+        if (fComponents[key]) delete fComponents[key];
+        else fComponents[key] = { rune: c.rune, name: c.name };
+        renderFormComponents();
+      };
+      group.appendChild(el);
+    });
+    host.appendChild(group);
+  });
+}
+
+// ── Tags (per ritual) ────────────────────────────────────────────────────────
+
+function renderFormTags() {
+  var host = document.getElementById('f-tags');
+  host.innerHTML = '';
+  Object.keys(fTags).forEach(function(tag) {
+    var chip = document.createElement('span');
+    chip.className = 'tag-chip';
+    chip.appendChild(document.createTextNode(tag));
+    var rm = document.createElement('button');
+    rm.className = 'tag-chip-remove';
+    rm.textContent = '×';
+    rm.onclick = function() { delete fTags[tag]; renderFormTags(); };
+    chip.appendChild(rm);
+    host.appendChild(chip);
+  });
+}
+
+function addFormTag() {
+  var input = document.getElementById('f-tag-input');
+  var val = input.value.trim();
+  if (val) { fTags[val] = true; renderFormTags(); }
+  input.value = '';
+  input.focus();
 }
 
 // ── Save / clear form ─────────────────────────────────────────────────────────
@@ -536,7 +702,9 @@ async function saveRitual() {
   if (!fPrimary){ showMsg('Please select a primary rune.', '#dc2626'); return; }
   if (!effect)  { showMsg('Please describe the effect.', '#dc2626'); return; }
   var subs = Object.keys(fSubs);
-  var payload = { name: name, purpose: purpose, primary: fPrimary, subs: subs, effect: effect };
+  var tags = Object.keys(fTags);
+  var components = Object.keys(fComponents).map(function(k) { return fComponents[k]; });
+  var payload = { name: name, purpose: purpose, primary: fPrimary, subs: subs, effect: effect, tags: tags, components: components };
 
   try {
     if (fEditId) {
@@ -566,11 +734,11 @@ function clearForm() {
   document.getElementById('f-purpose').value = '';
   document.getElementById('f-effect').value = '';
   document.getElementById('form-msg').textContent = '';
-  fPrimary = null; fSubs = {}; fEditId = null;
+  fPrimary = null; fSubs = {}; fTags = {}; fComponents = {}; fEditId = null;
   document.getElementById('form-add-title').textContent = 'Add a Ritual';
   document.getElementById('form-add-sub').textContent = 'Record a ritual and save it to your library.';
   document.getElementById('form-save-btn').textContent = 'Save to library';
-  renderFormPrimary(); renderFormSubs();
+  renderFormPrimary(); renderFormSubs(); renderFormTags();
 }
 
 // ── Reference panel ───────────────────────────────────────────────────────────
@@ -634,6 +802,24 @@ function renderRef() {
         var strong = document.createElement('strong'); strong.textContent = c.name;
         var span = document.createElement('span'); span.textContent = c.desc;
         card.appendChild(strong); card.appendChild(span);
+
+        var usedByRituals = library.filter(function(r) {
+          return (r.components || []).some(function(rc) { return rc.rune === c.rune && rc.name === c.name; });
+        });
+        if (usedByRituals.length > 0) {
+          var usedNote = document.createElement('div');
+          usedNote.className = 'used-in-note';
+          usedNote.appendChild(document.createTextNode('Used in: '));
+          usedByRituals.forEach(function(r, idx) {
+            if (idx > 0) usedNote.appendChild(document.createTextNode(', '));
+            var link = document.createElement('a');
+            link.textContent = r.name;
+            link.onclick = function() { openDetail(r.id); };
+            usedNote.appendChild(link);
+          });
+          card.appendChild(usedNote);
+        }
+
         block.appendChild(card);
       });
     });
@@ -811,10 +997,21 @@ function renderCustomCompList() {
 async function init() {
   renderFormPrimary();
   renderFormSubs();
+  renderFormTags();
   await Promise.all([loadLibrary(), loadComponents(), loadArraysForBacklinks()]);
+
+  var params = new URLSearchParams(window.location.search);
+  var openId = params.get('open');
+  var compRune = params.get('compRune');
+  var compName = params.get('compName');
+  if (compRune && compName) {
+    refFilter = compRune;
+    document.getElementById('ref-search').value = compName;
+  }
   renderRef();
   renderCustomCompList();
-  if (window.location.hash === '#comps') switchTab('comps');
+  if (openId && library.some(function(r) { return r.id === openId; })) openDetail(openId);
+  else if (window.location.hash === '#comps') switchTab('comps');
   else renderIndexNav('add');
 }
 init();
