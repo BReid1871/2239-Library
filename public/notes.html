@@ -332,20 +332,56 @@ function openNote(id) {
   var updated = new Date(n.updatedAt || n.updated_at);
   meta.textContent = 'Last updated ' + updated.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) + ' at ' + updated.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
 
+  var actionRow = document.createElement('div');
+  actionRow.style.cssText = 'display:flex;gap:6px;margin-top:1rem;';
+
+  var undoBtn = document.createElement('button');
+  undoBtn.textContent = '↶ Undo';
+  undoBtn.title = 'Undo last edit';
+  undoBtn.style.fontSize = '12px';
+  undoBtn.onclick = function() { noteHistoryAction(id, 'undo'); };
+
+  var redoBtn = document.createElement('button');
+  redoBtn.textContent = '↷ Redo';
+  redoBtn.title = 'Redo';
+  redoBtn.style.fontSize = '12px';
+  redoBtn.onclick = function() { noteHistoryAction(id, 'redo'); };
+
   var delBtn = document.createElement('button');
   delBtn.className = 'danger';
   delBtn.textContent = 'Delete note';
   delBtn.style.fontSize = '12px';
-  delBtn.style.marginTop = '1rem';
   delBtn.onclick = function() { if (confirm('Delete this note?')) deleteNote(id); };
+
+  actionRow.appendChild(undoBtn);
+  actionRow.appendChild(redoBtn);
+  actionRow.appendChild(delBtn);
+
+  var historyMsg = document.createElement('div');
+  historyMsg.id = 'note-history-msg';
+  historyMsg.style.cssText = 'font-size:11px;color:var(--text3);min-height:1.2em;margin-top:4px;';
 
   editor.appendChild(titleInput);
   editor.appendChild(renderLinksRow(n));
   editor.appendChild(bodyInput);
   editor.appendChild(meta);
-  editor.appendChild(delBtn);
+  editor.appendChild(actionRow);
+  editor.appendChild(historyMsg);
   area.appendChild(editor);
   titleInput.focus();
+}
+
+async function noteHistoryAction(id, action) {
+  saveNoteDebounced.cancel();
+  try {
+    await api('POST', '/api/notes/' + id + '/' + action);
+  } catch (e) {
+    var msg = document.getElementById('note-history-msg');
+    if (msg) msg.textContent = e.message;
+    return;
+  }
+  await loadNotes();
+  openNote(id);
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
@@ -353,6 +389,8 @@ function openNote(id) {
 async function init() {
   await Promise.all([loadNotes(), loadLinkables()]);
   renderNoteList();
+  var openId = new URLSearchParams(window.location.search).get('open');
+  if (openId && notes.some(function(n) { return n.id === openId; })) openNote(openId);
 }
 init();
 </script>

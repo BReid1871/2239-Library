@@ -12,5 +12,7 @@ test('the MySQL pool connects and the schema is initialized', async () => {
 
   const [tables] = await pool.query('SHOW TABLES');
   const tableNames = tables.map((row) => Object.values(row)[0]);
-  expect(tableNames).toEqual(expect.arrayContaining(['rituals', 'notes', 'custom_components', 'arrays']));
+  expect(tableNames).toEqual(expect.arrayContaining([
+    'rituals', 'notes', 'custom_components', 'arrays', 'array_history', 'ritual_history', 'note_history',
+  ]));
 });

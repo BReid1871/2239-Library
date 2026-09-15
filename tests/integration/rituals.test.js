@@ -161,3 +161,74 @@ test('search matches a tag and a component name', async () => {
   const byComponent = await request(app).get('/api/rituals').query({ q: 'Chaotic Objects' });
   expect(byComponent.body.map((r) => r.name)).toEqual(['Veil of Pale Embers']);
 });
+
+test('undo/redo round-trips through an edit, and reports when there is nothing to undo/redo', async () => {
+  const create = await request(app).post('/api/rituals').send({
+    name: 'Original', purpose: 'Boon', primary: 'Aether', subs: [], effect: 'E1',
+  });
+  expect(create.body.canUndo).toBe(false);
+  expect(create.body.canRedo).toBe(false);
+
+  const noUndo = await request(app).post('/api/rituals/' + create.body.id + '/undo');
+  expect(noUndo.status).toBe(409);
+
+  const edit = await request(app)
+    .put('/api/rituals/' + create.body.id)
+    .send({ name: 'Renamed', purpose: 'Boon', primary: 'Aether', subs: [], effect: 'E1' });
+  expect(edit.status).toBe(200);
+  expect(edit.body.name).toBe('Renamed');
+  expect(edit.body.canUndo).toBe(true);
+  expect(edit.body.canRedo).toBe(false);
+
+  const undo = await request(app).post('/api/rituals/' + create.body.id + '/undo');
+  expect(undo.status).toBe(200);
+  expect(undo.body.name).toBe('Original');
+  expect(undo.body.canUndo).toBe(false);
+  expect(undo.body.canRedo).toBe(true);
+
+  const noUndoAgain = await request(app).post('/api/rituals/' + create.body.id + '/undo');
+  expect(noUndoAgain.status).toBe(409);
+
+  const redo = await request(app).post('/api/rituals/' + create.body.id + '/redo');
+  expect(redo.status).toBe(200);
+  expect(redo.body.name).toBe('Renamed');
+  expect(redo.body.canUndo).toBe(true);
+  expect(redo.body.canRedo).toBe(false);
+
+  const noRedo = await request(app).post('/api/rituals/' + create.body.id + '/redo');
+  expect(noRedo.status).toBe(409);
+});
+
+test('a PUT that changes nothing does not add a history entry', async () => {
+  const create = await request(app).post('/api/rituals').send({
+    name: 'Steady', purpose: 'Boon', primary: 'Aether', subs: [], effect: 'E1',
+  });
+  const noop = await request(app)
+    .put('/api/rituals/' + create.body.id)
+    .send({ name: 'Steady', purpose: 'Boon', primary: 'Aether', subs: [], effect: 'E1' });
+  expect(noop.body.canUndo).toBe(false);
+});
+
+test('a new edit after an undo discards the old redo branch', async () => {
+  const create = await request(app).post('/api/rituals').send({
+    name: 'A', purpose: 'Boon', primary: 'Aether', subs: [], effect: 'E1',
+  });
+  await request(app).put('/api/rituals/' + create.body.id).send({ name: 'B', purpose: 'Boon', primary: 'Aether', subs: [], effect: 'E1' });
+  await request(app).post('/api/rituals/' + create.body.id + '/undo');
+
+  const edit = await request(app)
+    .put('/api/rituals/' + create.body.id)
+    .send({ name: 'C', purpose: 'Boon', primary: 'Aether', subs: [], effect: 'E1' });
+  expect(edit.body.name).toBe('C');
+  expect(edit.body.canRedo).toBe(false);
+
+  const redo = await request(app).post('/api/rituals/' + create.body.id + '/redo');
+  expect(redo.status).toBe(409);
+});
+
+test('undo/redo 404 for a ritual that does not exist', async () => {
+  const undo = await request(app).post('/api/rituals/nope/undo');
+  expect(undo.status).toBe(404);
+  const redo = await request(app).post('/api/rituals/nope/redo');
+  expect(redo.status).toBe(404);
+});

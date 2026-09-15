@@ -33,11 +33,16 @@ window.api = async function(method, url, body) {
 
 window.debounce = function(fn, ms) {
   var t;
-  return function() {
+  var debounced = function() {
     var args = arguments, ctx = this;
     clearTimeout(t);
     t = setTimeout(function() { fn.apply(ctx, args); }, ms);
   };
+  // Lets a caller discard a pending call outright — e.g. an undo/redo that
+  // would otherwise be clobbered by a debounced autosave still in flight
+  // from edits made just before it.
+  debounced.cancel = function() { clearTimeout(t); };
+  return debounced;
 };
 
 window.esc = function(str) {

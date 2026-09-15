@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { MAX_BOARD_RADIUS } = require('../../public/hex');
 const { validatePlacements } = require('../lib/arrays');
 const { asyncHandler } = require('../lib/asyncHandler');
+const { makeHistory } = require('../lib/history');
 
 function rowToArray(row) {
   return {
@@ -28,30 +29,22 @@ function parsePlacements(value, fallback) {
   return Array.isArray(value) ? value : fallback;
 }
 
-function statesEqual(a, b) {
-  return a.name === b.name && a.radius === b.radius && JSON.stringify(a.placements) === JSON.stringify(b.placements);
-}
-
 async function validRitualIdSet(db) {
   const [rows] = await db.query('SELECT id FROM rituals');
   return new Set(rows.map((r) => r.id));
 }
 
-async function canRedo(db, arrayId, historySeq) {
-  const [rows] = await db.query('SELECT 1 FROM array_history WHERE array_id = ? AND seq = ? LIMIT 1', [arrayId, historySeq + 1]);
-  return rows.length > 0;
-}
-
-async function withHistoryFlags(db, row) {
-  return {
-    ...rowToArray(row),
-    canUndo: row.history_seq > 0,
-    canRedo: await canRedo(db, row.id, row.history_seq),
-  };
-}
-
 function arraysRouter(db) {
   const router = express.Router();
+  const history = makeHistory(db, {
+    historyTable: 'array_history',
+    idColumn: 'array_id',
+    columns: [{ name: 'name' }, { name: 'radius' }, { name: 'placements', json: true }],
+  });
+
+  async function withHistoryFlags(row) {
+    return { ...rowToArray(row), ...(await history.flags(row.id, row.history_seq)) };
+  }
 
   router.get('/', asyncHandler(async (req, res) => {
     const q = (req.query.q || '').trim();
@@ -89,13 +82,7 @@ function arraysRouter(db) {
       row.updated_at,
       row.history_seq,
     ]);
-    await db.query('INSERT INTO array_history (array_id, seq, name, radius, placements, created_at) VALUES (?, 0, ?, ?, ?, ?)', [
-      row.id,
-      row.name,
-      row.radius,
-      JSON.stringify(row.placements),
-      row.created_at,
-    ]);
+    await history.insertSnapshot(row.id, 0, row, row.created_at);
     res.status(201).json({ ...rowToArray(row), canUndo: false, canRedo: false });
   }));
 
@@ -113,23 +100,10 @@ function arraysRouter(db) {
     const validationError = validatePlacements(placements, radius, validIds);
     if (validationError) return res.status(400).json({ error: validationError });
 
-    const newState = { name, radius, placements };
-    if (statesEqual(newState, { name: existing.name, radius: existing.radius, placements: existing.placements })) {
-      return res.json(await withHistoryFlags(db, existing));
-    }
-
     const updated_at = new Date().toISOString();
-    const nextSeq = existing.history_seq + 1;
+    const nextSeq = await history.recordEdit(req.params.id, existing, { name, radius, placements }, updated_at);
+    if (nextSeq === null) return res.json(await withHistoryFlags(existing));
 
-    await db.query('DELETE FROM array_history WHERE array_id = ? AND seq > ?', [req.params.id, existing.history_seq]);
-    await db.query('INSERT INTO array_history (array_id, seq, name, radius, placements, created_at) VALUES (?, ?, ?, ?, ?, ?)', [
-      req.params.id,
-      nextSeq,
-      name,
-      radius,
-      JSON.stringify(placements),
-      updated_at,
-    ]);
     await db.query('UPDATE arrays SET name=?, radius=?, placements=?, updated_at=?, history_seq=? WHERE id=?', [
       name,
       radius,
@@ -140,7 +114,7 @@ function arraysRouter(db) {
     ]);
 
     const [updatedRows] = await db.query('SELECT * FROM arrays WHERE id = ?', [req.params.id]);
-    res.json(await withHistoryFlags(db, updatedRows[0]));
+    res.json(await withHistoryFlags(updatedRows[0]));
   }));
 
   router.post('/:id/undo', asyncHandler(async (req, res) => {
@@ -148,22 +122,21 @@ function arraysRouter(db) {
     if (existingRows.length === 0) return res.status(404).json({ error: 'Array not found.' });
     const existing = existingRows[0];
 
-    if (existing.history_seq === 0) return res.status(409).json({ error: 'Nothing to undo.' });
+    const snapshot = await history.shift(req.params.id, existing.history_seq, -1);
+    if (!snapshot) return res.status(409).json({ error: 'Nothing to undo.' });
 
-    const [snapshotRows] = await db.query('SELECT * FROM array_history WHERE array_id = ? AND seq = ?', [req.params.id, existing.history_seq - 1]);
-    const snapshot = snapshotRows[0];
     const updated_at = new Date().toISOString();
     await db.query('UPDATE arrays SET name=?, radius=?, placements=?, updated_at=?, history_seq=? WHERE id=?', [
       snapshot.name,
       snapshot.radius,
       JSON.stringify(snapshot.placements),
       updated_at,
-      existing.history_seq - 1,
+      snapshot.seq,
       req.params.id,
     ]);
 
     const [updatedRows] = await db.query('SELECT * FROM arrays WHERE id = ?', [req.params.id]);
-    res.json(await withHistoryFlags(db, updatedRows[0]));
+    res.json(await withHistoryFlags(updatedRows[0]));
   }));
 
   router.post('/:id/redo', asyncHandler(async (req, res) => {
@@ -171,9 +144,8 @@ function arraysRouter(db) {
     if (existingRows.length === 0) return res.status(404).json({ error: 'Array not found.' });
     const existing = existingRows[0];
 
-    const [snapshotRows] = await db.query('SELECT * FROM array_history WHERE array_id = ? AND seq = ?', [req.params.id, existing.history_seq + 1]);
-    if (snapshotRows.length === 0) return res.status(409).json({ error: 'Nothing to redo.' });
-    const snapshot = snapshotRows[0];
+    const snapshot = await history.shift(req.params.id, existing.history_seq, 1);
+    if (!snapshot) return res.status(409).json({ error: 'Nothing to redo.' });
 
     const updated_at = new Date().toISOString();
     await db.query('UPDATE arrays SET name=?, radius=?, placements=?, updated_at=?, history_seq=? WHERE id=?', [
@@ -181,12 +153,12 @@ function arraysRouter(db) {
       snapshot.radius,
       JSON.stringify(snapshot.placements),
       updated_at,
-      existing.history_seq + 1,
+      snapshot.seq,
       req.params.id,
     ]);
 
     const [updatedRows] = await db.query('SELECT * FROM arrays WHERE id = ?', [req.params.id]);
-    res.json(await withHistoryFlags(db, updatedRows[0]));
+    res.json(await withHistoryFlags(updatedRows[0]));
   }));
 
   router.delete('/:id', asyncHandler(async (req, res) => {

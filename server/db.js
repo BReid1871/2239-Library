@@ -1,6 +1,6 @@
 const mysql = require('mysql2/promise');
 
-const TABLES = ['rituals', 'notes', 'custom_components', 'arrays', 'array_history'];
+const TABLES = ['rituals', 'notes', 'custom_components', 'arrays', 'array_history', 'ritual_history', 'note_history'];
 
 const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS rituals (
@@ -62,6 +62,34 @@ const SCHEMA_STATEMENTS = [
     created_at VARCHAR(32) NOT NULL,
     PRIMARY KEY (array_id, seq)
   )`,
+  // Same undo/redo history mechanics as array_history (see server/lib/history.js),
+  // applied to rituals. `rituals.history_seq` (added below) points at which
+  // snapshot is current.
+  `CREATE TABLE IF NOT EXISTS ritual_history (
+    ritual_id VARCHAR(36) NOT NULL,
+    seq INT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    purpose VARCHAR(64) NOT NULL,
+    primary_rune VARCHAR(64) NOT NULL,
+    subs JSON NOT NULL,
+    tier VARCHAR(16) NOT NULL,
+    effect TEXT NOT NULL,
+    tags JSON NOT NULL,
+    components JSON NOT NULL,
+    created_at VARCHAR(32) NOT NULL,
+    PRIMARY KEY (ritual_id, seq)
+  )`,
+  // Same undo/redo history mechanics as array_history, applied to notes.
+  // `notes.history_seq` (added below) points at which snapshot is current.
+  `CREATE TABLE IF NOT EXISTS note_history (
+    note_id VARCHAR(36) NOT NULL,
+    seq INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    body TEXT NOT NULL,
+    links JSON NOT NULL,
+    created_at VARCHAR(32) NOT NULL,
+    PRIMARY KEY (note_id, seq)
+  )`,
 ];
 
 // Real MySQL (unlike MariaDB) never supported ADD/DROP COLUMN ... IF
@@ -81,6 +109,8 @@ const MIGRATIONS = [
   { table: 'rituals', column: 'tags', kind: 'add', ddl: "ALTER TABLE rituals ADD COLUMN tags JSON NOT NULL DEFAULT ('[]')" },
   { table: 'rituals', column: 'components', kind: 'add', ddl: "ALTER TABLE rituals ADD COLUMN components JSON NOT NULL DEFAULT ('[]')" },
   { table: 'notes', column: 'links', kind: 'add', ddl: "ALTER TABLE notes ADD COLUMN links JSON NOT NULL DEFAULT ('[]')" },
+  { table: 'rituals', column: 'history_seq', kind: 'add', ddl: 'ALTER TABLE rituals ADD COLUMN history_seq INT NOT NULL DEFAULT 0' },
+  { table: 'notes', column: 'history_seq', kind: 'add', ddl: 'ALTER TABLE notes ADD COLUMN history_seq INT NOT NULL DEFAULT 0' },
 ];
 
 function resolveConnectionConfig() {
