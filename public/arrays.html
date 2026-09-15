@@ -157,9 +157,9 @@ var REACH_OFFSET_PX = 5;
 var REACH_START_PAD = 12;
 var REACH_END_PAD = 20;
 
-var MIN_ZOOM = 0.5;
-var MAX_ZOOM = 2.5;
-var ZOOM_STEP = 0.25;
+var MIN_ZOOM = 0.1;
+var MAX_ZOOM = 2;
+var ZOOM_STEP = 0.1;
 var zoomLevel = 1;
 
 function getArray(id) {
@@ -381,12 +381,33 @@ function renderHexBoard(arr, placements, zoom) {
 
   // Zoom is applied as a CSS transform on the (unscaled) svg, wrapped in a
   // container sized to the scaled dimensions so .hex-board-wrap's scrollbars
-  // reflect the zoomed-in size.
+  // reflect the zoomed-in size. Kept as stable ids (only one board is ever
+  // on screen at a time) so changing zoom can restyle these two elements
+  // directly instead of rebuilding the whole board — see applyZoom().
   var container = document.createElement('div');
+  container.id = 'hex-board-container';
   container.style.cssText = 'position:relative;width:' + (width * zoom) + 'px;height:' + (height * zoom) + 'px;';
+  svg.id = 'hex-board-svg';
   svg.style.cssText = 'position:absolute;top:0;left:0;transform-origin:0 0;transform:scale(' + zoom + ');';
   container.appendChild(svg);
   return container;
+}
+
+// Restyles the already-rendered board in place for a new zoom level,
+// instead of rebuilding its hexes/lines/badges from scratch — keeps
+// scroll-wheel zooming smooth, and preserves scroll position (the caller
+// adjusts it separately to keep the pointer anchored).
+function applyZoom(zoom) {
+  var container = document.getElementById('hex-board-container');
+  var svg = document.getElementById('hex-board-svg');
+  if (!container || !svg) return;
+  var baseWidth = parseFloat(svg.getAttribute('width'));
+  var baseHeight = parseFloat(svg.getAttribute('height'));
+  container.style.width = (baseWidth * zoom) + 'px';
+  container.style.height = (baseHeight * zoom) + 'px';
+  svg.style.transform = 'scale(' + zoom + ')';
+  var zoomVal = document.getElementById('zoom-val');
+  if (zoomVal) zoomVal.textContent = Math.round(zoom * 100) + '%';
 }
 
 function renderPlacementList(arr, placements) {
@@ -489,10 +510,10 @@ function renderArrayEditor(arr) {
   zoomLabel.style.cssText = 'font-size:11px;color:var(--text3);flex-shrink:0;margin-left:8px;';
   zoomLabel.textContent = 'Zoom:';
   var zoomDec = document.createElement('button'); zoomDec.textContent = '−'; zoomDec.style.cssText = 'padding:2px 6px;font-size:12px;';
-  var zoomVal = document.createElement('span'); zoomVal.style.cssText = 'font-size:12px;min-width:38px;text-align:center;'; zoomVal.textContent = Math.round(zoomLevel * 100) + '%';
+  var zoomVal = document.createElement('span'); zoomVal.id = 'zoom-val'; zoomVal.style.cssText = 'font-size:12px;min-width:38px;text-align:center;'; zoomVal.textContent = Math.round(zoomLevel * 100) + '%';
   var zoomInc = document.createElement('button'); zoomInc.textContent = '+'; zoomInc.style.cssText = 'padding:2px 6px;font-size:12px;';
-  zoomDec.onclick = function() { changeZoom(arr, -ZOOM_STEP); };
-  zoomInc.onclick = function() { changeZoom(arr, ZOOM_STEP); };
+  zoomDec.onclick = function() { setZoom(zoomLevel - ZOOM_STEP); };
+  zoomInc.onclick = function() { setZoom(zoomLevel + ZOOM_STEP); };
 
   var delBtn = document.createElement('button');
   delBtn.className = 'danger';
@@ -521,6 +542,7 @@ function renderArrayEditor(arr) {
   var boardWrap = document.createElement('div');
   boardWrap.className = 'hex-board-wrap';
   boardWrap.appendChild(renderHexBoard(arr, placements, zoomLevel));
+  attachZoomScroll(boardWrap);
 
   row.appendChild(boardWrap);
   row.appendChild(renderPlacementList(arr, placements));
@@ -550,11 +572,37 @@ function changeRadius(arr, delta) {
 
 // Zoom is a view preference, not part of the array's saved data — it isn't
 // persisted, and resets to 100% whenever a different array is opened.
-function changeZoom(arr, delta) {
-  var n = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Math.round((zoomLevel + delta) * 100) / 100));
+// Restyles the existing board in place (applyZoom) rather than re-rendering
+// the whole editor, so it stays smooth under a rapid stream of wheel events.
+function setZoom(next) {
+  var n = Math.round(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, next)) * 100) / 100;
   if (n === zoomLevel) return;
   zoomLevel = n;
-  renderArrayEditor(arr);
+  applyZoom(zoomLevel);
+}
+
+// Trackpad pinch-to-zoom is delivered by the browser as a wheel event with
+// ctrlKey set (true for an actual pinch gesture, and conveniently also true
+// for a physical Ctrl/Cmd+scroll — which doubles as the mouse-friendly
+// equivalent) — plain two-finger scrolling has ctrlKey false and keeps
+// panning the board normally.
+function attachZoomScroll(boardWrap) {
+  boardWrap.addEventListener('wheel', function(e) {
+    if (!e.ctrlKey) return;
+    e.preventDefault();
+
+    var rect = boardWrap.getBoundingClientRect();
+    var offsetX = e.clientX - rect.left, offsetY = e.clientY - rect.top;
+    // The board point currently under the pointer, so it can be kept there
+    // after the zoom changes instead of the view jumping around it.
+    var boardX = (boardWrap.scrollLeft + offsetX) / zoomLevel;
+    var boardY = (boardWrap.scrollTop + offsetY) / zoomLevel;
+
+    setZoom(zoomLevel * Math.exp(-e.deltaY / 300));
+
+    boardWrap.scrollLeft = boardX * zoomLevel - offsetX;
+    boardWrap.scrollTop = boardY * zoomLevel - offsetY;
+  }, { passive: false });
 }
 
 // Grows or shrinks one placement's size in place. Growing is validated the
