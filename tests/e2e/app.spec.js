@@ -116,6 +116,29 @@ test('the resolution log lists reaches as text, matching the board', async ({ pa
   await request.delete(`/api/arrays/${arr.id}`);
 });
 
+test('the same ritual placed more than once is numbered in the placement list and resolution log', async ({ page, request }) => {
+  const ritual = await (await request.post('/api/rituals', { data: {
+    name: 'Twin Ritual', purpose: 'Evocation', primary: 'Lethargy', subs: [], effect: 'a',
+  } })).json();
+  const arr = await (await request.post('/api/arrays', { data: {
+    name: 'E2E Twin Array',
+    radius: 2,
+    placements: [
+      { id: 'p1', ritualId: ritual.id, q: 0, r: 0, size: 1, isEffector: true },
+      { id: 'p2', ritualId: ritual.id, q: 1, r: 0, size: 1, isEffector: false },
+    ],
+  } })).json();
+
+  await page.goto('/arrays.html');
+  await page.locator('.array-card', { hasText: 'E2E Twin Array' }).click();
+
+  await expect(page.locator('.placement-item-name', { hasText: 'Twin Ritual (1)' })).toBeVisible();
+  await expect(page.locator('.placement-item-name', { hasText: 'Twin Ritual (2)' })).toBeVisible();
+  await expect(page.locator('li', { hasText: 'Twin Ritual (1) Activates Twin Ritual (2) (distance 1)' })).toBeVisible();
+
+  await request.delete(`/api/arrays/${arr.id}`);
+});
+
 test('anti-effectors, non-triggerable rituals, and the activation simulation', async ({ page, request }) => {
   const ritualA = await (await request.post('/api/rituals', { data: {
     name: 'Sim Source', purpose: 'Enchantment', primary: 'Potency', subs: [], effect: 'a',
