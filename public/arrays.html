@@ -12,7 +12,10 @@
 .array-card.selected { border-color: var(--accent); background: var(--bg); }
 .array-card-title { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .array-card-meta { font-size: 10px; color: var(--text3); margin-top: 1px; }
-.hex-board-wrap { flex: 1; overflow: auto; border: 0.5px solid var(--border2); border-radius: var(--radius); background: var(--bg2); position: relative; min-width: 0; }
+/* Fixed height (not flex:1 off a bounded ancestor) so the board keeps a
+   consistent on-screen size regardless of how much sits above it (resolution
+   log, simulations panel) — the page scrolls to reach it instead. */
+.hex-board-wrap { height: 560px; flex: 1; overflow: auto; border: 0.5px solid var(--border2); border-radius: var(--radius); background: var(--bg2); position: relative; min-width: 0; }
 .hex-cell { fill: var(--bg); stroke: var(--border2); stroke-width: 1; cursor: pointer; transition: fill 0.1s, stroke 0.1s; }
 .hex-cell:hover { stroke: var(--accent); }
 .hex-cell.occupied { cursor: default; }
@@ -41,7 +44,7 @@
 .simulation-roster-dot.active { background: var(--accent); }
 .simulation-roster-dot.inactive { background: var(--border2); }
 .simulation-empty { font-size: 11px; color: var(--text3); padding: 8px 10px; }
-.placement-list { width: 210px; flex-shrink: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.placement-list { width: 210px; flex-shrink: 0; height: 560px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .placement-item { display: flex; align-items: flex-start; gap: 6px; padding: 7px 9px; border-radius: var(--radius); background: var(--bg2); border: 0.5px solid var(--border); }
 .placement-item-body { flex: 1; min-width: 0; }
 .placement-item-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -78,19 +81,24 @@
 <div class="page-wrap">
   <div class="tabs" id="nav"></div>
 
-  <div style="display:flex;align-items:flex-start;gap:1.5rem;height:calc(100vh - 160px);">
+  <div style="display:flex;align-items:flex-start;gap:1.5rem;">
 
-    <!-- Left: array list + controls -->
-    <div style="width:200px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;height:100%;overflow:hidden;">
+    <!-- Left: array list + controls. Sticky + independently scrollable so it
+         stays put as the page scrolls past a tall right-hand editor, instead
+         of the two columns being forced to the same fixed height. -->
+    <div style="width:200px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;position:sticky;top:1rem;max-height:calc(100vh - 2rem);">
       <div style="display:flex;align-items:center;justify-content:space-between;">
         <span style="font-size:13px;font-weight:500;">Arrays</span>
         <button class="primary" onclick="newArray()" style="font-size:11px;padding:3px 10px;">+ New</button>
       </div>
-      <div id="array-list" style="flex:1;overflow-y:auto;"></div>
+      <div id="array-list" style="overflow-y:auto;"></div>
     </div>
 
-    <!-- Right: array editor -->
-    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;height:100%;" id="array-editor-area">
+    <!-- Right: array editor. No fixed height — it grows with its content
+         (resolution log, simulations panel, board) and the page scrolls,
+         rather than squeezing the hex board smaller to fit everything into
+         one viewport-height column. -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px;" id="array-editor-area">
       <div class="notes-empty">Select an array or create a new one.</div>
     </div>
 
@@ -829,7 +837,7 @@ function renderArrayEditor(arr) {
   // pairs (within the source ritual's range) resolve first; the
   // resolution log above states the same order as plain text.
   var row = document.createElement('div');
-  row.style.cssText = 'display:flex;gap:10px;flex:1;min-height:0;';
+  row.style.cssText = 'display:flex;gap:10px;';
 
   var boardWrap = document.createElement('div');
   boardWrap.className = 'hex-board-wrap';
