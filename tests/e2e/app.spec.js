@@ -191,6 +191,54 @@ test('anti-effectors, non-triggerable rituals, and the activation simulation', a
   await request.delete(`/api/arrays/${arr.id}`);
 });
 
+test('a conditional effector branches the simulation into Scenarios per condition', async ({ page, request }) => {
+  const ritualA = await (await request.post('/api/rituals', { data: {
+    name: 'Sim Trigger', purpose: 'Enchantment', primary: 'Prime', subs: [], effect: 'a',
+  } })).json();
+  const ritualB = await (await request.post('/api/rituals', { data: {
+    name: 'Sim Conditional', purpose: 'Familiar/Summoning', primary: 'Order', subs: [], effect: 'b',
+  } })).json();
+  const ritualC = await (await request.post('/api/rituals', { data: {
+    name: 'Sim Target', purpose: 'Boon', primary: 'Refuge', subs: [], effect: 'c', triggerable: false,
+  } })).json();
+
+  // A (unconditioned effector, size-1 range 2) reaches B (distance 2) but
+  // not C (distance 4). B (conditioned effector, "Night") reaches C
+  // (distance 2) — so C only ever activates in the branch where B's
+  // condition is met.
+  const arr = await (await request.post('/api/arrays', { data: {
+    name: 'E2E Conditional Array',
+    radius: 4,
+    placements: [
+      { id: 'p1', ritualId: ritualA.id, q: 0, r: 0, size: 1, isEffector: true },
+      { id: 'p2', ritualId: ritualB.id, q: 2, r: 0, size: 1, isEffector: true, condition: 'Night' },
+      { id: 'p3', ritualId: ritualC.id, q: 4, r: 0, size: 1 },
+    ],
+  } })).json();
+
+  await page.goto('/arrays.html');
+  await page.locator('.array-card', { hasText: 'E2E Conditional Array' }).click();
+
+  await expect(
+    page.locator('.placement-item', { hasText: 'Sim Conditional' }).locator('.condition-badge')
+  ).toHaveText('if: Night');
+
+  await page.locator('.simulation-entry-header', { hasText: 'Sim Trigger' }).click();
+  const simBody = page.locator('.simulation-entry', { hasText: 'Sim Trigger' }).locator('.simulation-entry-body');
+  await expect(simBody.locator('text=Scenarios (2)')).toBeVisible();
+
+  const metScenario = simBody.locator('.scenario-entry', { hasText: 'All conditions met' });
+  await metScenario.locator('.scenario-entry-header').click();
+  await expect(metScenario.locator('li', { hasText: 'Sim Conditional activates Sim Target' })).toBeVisible();
+  await expect(metScenario.locator('.simulation-roster-item', { hasText: 'Sim Target — Active' })).toBeVisible();
+
+  const unmetScenario = simBody.locator('.scenario-entry', { hasText: 'No conditions met' });
+  await unmetScenario.locator('.scenario-entry-header').click();
+  await expect(unmetScenario.locator('.simulation-roster-item', { hasText: 'Sim Target — Inactive' })).toBeVisible();
+
+  await request.delete(`/api/arrays/${arr.id}`);
+});
+
 test('the range preview highlights the board while the ritual picker is open', async ({ page, request }) => {
   const arr = await (await request.post('/api/arrays', { data: { name: 'E2E Preview Array', radius: 4, placements: [] } })).json();
 

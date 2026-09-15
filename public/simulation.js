@@ -109,9 +109,17 @@
     return { edges: credited, kind: kind, becameActive: nextActive };
   }
 
+  // `opts.disabledSourceIds` ({id: true}) lets a caller treat specific
+  // effector/anti-effector placements as if they weren't sources at all
+  // this call — used to simulate a conditional effector/anti-effector
+  // whose condition isn't met this branch (see simulateBranches below) —
+  // without touching computeReaches, which stays a purely geometric,
+  // condition-independent picture of what the board can show while
+  // editing.
   function simulate(entries, reaches, startPlacementId, opts) {
     var maxPasses = (opts && opts.maxPasses) || entries.length + 1;
     var maxRounds = entries.length + 1;
+    var disabledSourceIds = (opts && opts.disabledSourceIds) || {};
     var active = {};
     entries.forEach(function (e) { active[e.placement.id] = false; });
     if (!(startPlacementId in active)) return null;
@@ -120,7 +128,8 @@
     function activeSourceIds() {
       var ids = {};
       entries.forEach(function (e) {
-        if (active[e.placement.id] && (e.placement.isEffector || e.placement.isAntiEffector)) ids[e.placement.id] = true;
+        var id = e.placement.id;
+        if (active[id] && !disabledSourceIds[id] && (e.placement.isEffector || e.placement.isAntiEffector)) ids[id] = true;
       });
       return ids;
     }
@@ -178,5 +187,53 @@
     return { active: active, passes: passes, stabilized: stabilized };
   }
 
-  return { computeReaches: computeReaches, simulate: simulate };
+  // Guard rail, not a game rule — keeps 2^N branch enumeration in
+  // simulateBranches from blowing up; same spirit as hex.js's
+  // MAX_PLACEMENT_SIZE/MAX_BOARD_RADIUS.
+  var MAX_CONDITIONED = 8;
+
+  // Placements whose effector/anti-effector role only functions if some
+  // condition outside the array's own model is met (e.g. "only at
+  // night") — these are what simulateBranches enumerates over. A
+  // placement's condition is independent of every other placement's, even
+  // if the text happens to match — there's no shared/linked pool.
+  function conditionedEntries(entries) {
+    return entries.filter(function (e) {
+      return !!e.placement.condition && (e.placement.isEffector || e.placement.isAntiEffector);
+    });
+  }
+
+  // Runs simulate() once per combination of every conditioned placement's
+  // condition being met or not (2^N branches, N = conditionedEntries(entries).length
+  // — 0 conditioned placements means exactly one branch, identical to a
+  // plain simulate() call). Each branch's `assignment` lists every
+  // conditioned entry with whether it was treated as met this branch;
+  // unmet entries are passed to simulate() as disabledSourceIds, so they
+  // never originate a reach for that branch's run.
+  function simulateBranches(entries, reaches, startPlacementId) {
+    var conditioned = conditionedEntries(entries);
+    var n = conditioned.length;
+    var branches = [];
+    var total = Math.pow(2, n);
+    for (var mask = 0; mask < total; mask++) {
+      var assignment = conditioned.map(function (entry, i) {
+        return { entry: entry, met: !!(mask & (1 << i)) };
+      });
+      var disabledSourceIds = {};
+      assignment.forEach(function (a) {
+        if (!a.met) disabledSourceIds[a.entry.placement.id] = true;
+      });
+      var result = simulate(entries, reaches, startPlacementId, { disabledSourceIds: disabledSourceIds });
+      branches.push({ assignment: assignment, result: result });
+    }
+    return branches;
+  }
+
+  return {
+    computeReaches: computeReaches,
+    simulate: simulate,
+    conditionedEntries: conditionedEntries,
+    simulateBranches: simulateBranches,
+    MAX_CONDITIONED: MAX_CONDITIONED,
+  };
 });

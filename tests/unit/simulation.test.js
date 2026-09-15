@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { computeReaches, simulate } from '../../public/simulation.js';
+import { computeReaches, simulate, conditionedEntries, simulateBranches } from '../../public/simulation.js';
 
 function entry(id, q, r, opts) {
   return {
@@ -197,4 +197,78 @@ test('simulate: two same-kind sources at different distances both get credited, 
   // it, on the next pass.
   expect(result.active.antiNear).toBe(false);
   expect(result.active.antiFar).toBe(false);
+});
+
+test('conditionedEntries finds placements with both a condition and an effector/anti-effector role', () => {
+  var entries = [
+    entry('a', 0, 0, { isEffector: true, condition: 'Night' }),
+    entry('b', 1, 0, { isEffector: true }), // no condition
+    entry('c', 2, 0, { condition: 'Night' }), // condition set, but not a source role
+    entry('d', 3, 0, { isAntiEffector: true, condition: 'Rain' }),
+  ];
+  expect(conditionedEntries(entries).map((e) => e.placement.id)).toEqual(['a', 'd']);
+});
+
+test('simulateBranches with no conditioned placements returns exactly one branch, identical to simulate()', () => {
+  var entries = [
+    entry('a', 0, 0, { isEffector: true, range: 1 }),
+    entry('b', 1, 0, { isEffector: true, range: 1 }),
+    entry('c', 2, 0, { range: 1 }),
+  ];
+  var reaches = computeReaches(entries);
+  var branches = simulateBranches(entries, reaches, 'a');
+
+  expect(branches).toHaveLength(1);
+  expect(branches[0].assignment).toEqual([]);
+  expect(branches[0].result).toEqual(simulate(entries, reaches, 'a'));
+});
+
+test('simulateBranches: one conditioned effector produces a met and a not-met branch', () => {
+  // trigger (unconditioned) always activates cond_eff. trigger's own range
+  // (1) doesn't reach target at all — target is only ever reached by
+  // cond_eff, and only in the branch where its condition is met.
+  var entries = [
+    entry('trigger', 0, 0, { isEffector: true, range: 1 }),
+    entry('cond_eff', 1, 0, { isEffector: true, range: 1, condition: 'Night' }),
+    entry('target', 2, 0, { range: 1 }),
+  ];
+  var reaches = computeReaches(entries);
+  var branches = simulateBranches(entries, reaches, 'trigger');
+
+  expect(branches).toHaveLength(2);
+  var met = branches.find((b) => b.assignment[0].met === true);
+  var notMet = branches.find((b) => b.assignment[0].met === false);
+  expect(met.assignment[0].entry.placement.id).toBe('cond_eff');
+  expect(met.result.active).toEqual({ trigger: true, cond_eff: true, target: true });
+  expect(notMet.result.active).toEqual({ trigger: true, cond_eff: true, target: false });
+});
+
+test('simulateBranches: two independent conditioned placements produce the full 2x2 cross-product', () => {
+  // trigger always activates condA and condB, each of which only reaches
+  // its own, entirely separate target if its own condition is met — the
+  // two are independent, so all four combinations are distinct outcomes.
+  var entries = [
+    entry('trigger', 0, 0, { isEffector: true, range: 1 }),
+    entry('condA', 1, 0, { isEffector: true, range: 1, condition: 'A' }),
+    entry('condB', -1, 0, { isEffector: true, range: 1, condition: 'B' }),
+    entry('targetA', 2, 0, { range: 1 }),
+    entry('targetB', -2, 0, { range: 1 }),
+  ];
+  var reaches = computeReaches(entries);
+  var branches = simulateBranches(entries, reaches, 'trigger');
+
+  expect(branches).toHaveLength(4);
+  function metMap(branch) {
+    var m = {};
+    branch.assignment.forEach((a) => { m[a.entry.placement.id] = a.met; });
+    return m;
+  }
+  branches.forEach((branch) => {
+    var met = metMap(branch);
+    expect(branch.result.active.targetA).toBe(met.condA);
+    expect(branch.result.active.targetB).toBe(met.condB);
+  });
+  // all four combinations are actually present, not just four copies of one
+  var signatures = branches.map((b) => JSON.stringify(metMap(b))).sort();
+  expect(new Set(signatures).size).toBe(4);
 });
