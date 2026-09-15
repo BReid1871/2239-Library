@@ -9,11 +9,17 @@
   --accent: #4f46e5;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #1c1c1e; --bg2: #2c2c2e; --bg3: #3a3a3c;
     --text: #f2f2f7; --text2: #aeaeb2; --text3: #636366;
     --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.2);
   }
+}
+/* Explicit user choice (see shared.js setTheme) overrides the OS setting. */
+:root[data-theme="dark"] {
+  --bg: #1c1c1e; --bg2: #2c2c2e; --bg3: #3a3a3c;
+  --text: #f2f2f7; --text2: #aeaeb2; --text3: #636366;
+  --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.2);
 }
 body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh; }
 
@@ -22,6 +28,8 @@ body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg);
 .tab { padding: 7px 15px; font-size: 13px; cursor: pointer; color: var(--text3); border-bottom: 2px solid transparent; margin-bottom: -0.5px; transition: all 0.1s; user-select: none; text-decoration: none; display: inline-block; }
 .tab:hover { color: var(--text); }
 .tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 500; }
+.theme-toggle { margin-left: auto; align-self: center; background: none; border: none; padding: 4px 10px; font-size: 15px; line-height: 1; color: var(--text2); cursor: pointer; }
+.theme-toggle:hover { color: var(--text); background: none; }
 
 /* Form */
 .form-label { font-size: 12px; color: var(--text3); display: block; margin-bottom: 5px; margin-top: 1.1rem; }

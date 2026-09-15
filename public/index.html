@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ritual Library</title>
+<script src="theme-init.js"></script>
 <link rel="stylesheet" href="shared.css">
 <style>
 /* Three-column layout */
@@ -270,7 +271,8 @@ function renderIndexNav(activeKey) {
   detailTab.textContent = 'View Ritual';
   detailTab.style.display = detailTabVisible ? '' : 'none';
   detailTab.onclick = function() { switchTab('detail'); };
-  document.getElementById('nav').appendChild(detailTab);
+  var nav = document.getElementById('nav');
+  nav.insertBefore(detailTab, nav.querySelector('.theme-toggle'));
 }
 
 function switchTab(tab) {
