@@ -46,13 +46,16 @@ test('simulate activates a chain across multiple passes', () => {
   expect(result.passes[1].effects[0].to.placement.id).toBe('c');
 });
 
-test('simulate deactivates an already-active target via an anti-effector on a later pass', () => {
+test('simulate deactivates an already-active target via an anti-effector, resolved within one pass', () => {
   // s (effector) activates m and v on pass 1. m is itself an anti-effector,
-  // so once active it reaches out too, but v (distance 2 from s, distance 1
-  // from m) is reached by both s and m on pass 2 — m is closer, but s is
-  // farther, so s's effector reach wins and v stays active that pass. Only
-  // once m deactivates s (the closer effector) on pass 2 does m's own reach
-  // to v finally go uncontested and deactivate it, on pass 3.
+  // so once active it joins pass 2's roster alongside s: v (distance 2
+  // from s, distance 1 from m) is reached by both — m is closer, but s is
+  // farther, so s's effector reach wins first and v stays active. Only
+  // once m deactivates s (the closer effector) does m's own reach to v go
+  // uncontested and deactivate it too — but s and m were both already on
+  // pass 2's roster (no new source joined), so all of this — s dropping
+  // out, then v finally following — resolves within that same pass, not a
+  // separate one.
   var entries = [
     entry('s', 0, 0, { isEffector: true, range: 3 }),
     entry('m', 1, 0, { isAntiEffector: true, range: 3 }),
@@ -63,15 +66,13 @@ test('simulate deactivates an already-active target via an anti-effector on a la
 
   expect(result.active).toEqual({ s: false, m: true, v: false });
   expect(result.stabilized).toBe(true);
-  expect(result.passes).toHaveLength(3);
+  expect(result.passes).toHaveLength(2);
 
   expect(result.passes[0].effects.map((e) => e.to.placement.id)).toEqual(['m', 'v']);
 
-  expect(result.passes[1].effects.map((e) => e.to.placement.id)).toEqual(['s']);
+  expect(result.passes[1].effects.map((e) => e.to.placement.id)).toEqual(['s', 'v']);
   expect(result.passes[1].effects[0]).toMatchObject({ kind: 'anti-effector', becameActive: false });
-
-  expect(result.passes[2].effects.map((e) => e.to.placement.id)).toEqual(['v']);
-  expect(result.passes[2].effects[0]).toMatchObject({ kind: 'anti-effector', becameActive: false });
+  expect(result.passes[1].effects[1]).toMatchObject({ kind: 'anti-effector', becameActive: false });
 });
 
 test('simulate: a farther effector overrides a closer anti-effector on the same target', () => {
@@ -113,25 +114,28 @@ test('simulate: a farther anti-effector overrides closer effectors, even the tri
     .toMatchObject({ kind: 'anti-effector', becameActive: false });
 });
 
-test('simulate: an exact-distance effector/anti-effector conflict leaves the target unchanged', () => {
-  // s_eff activates T directly (distance 2) and activates tie_anti
-  // (distance 4) on pass 1. On pass 2, s_eff and tie_anti both reach T —
-  // at the exact same distance (2). An effector and an anti-effector
-  // arriving at once, tied on distance, cancel out: T is left exactly as
-  // it was (still active from pass 1), not flipped either way.
+test('simulate: an exact-distance effector/anti-effector conflict leaves the target unchanged, forever', () => {
+  // trigger activates eff and anti directly on pass 1 (distance 3 each);
+  // eff and anti are too far apart (distance 5) to reach each other, so
+  // both stay active for the rest of the simulation, permanently tied on
+  // T (exactly distance 4 from each — trigger itself is too far from T,
+  // distance 4, to compete). Since the tie never breaks, T is never
+  // decisively reached by either kind and stays inactive the whole time —
+  // not because nothing ever tried, but because the tie cancels out on
+  // every round it's checked, indefinitely, so no second pass is ever
+  // needed (nothing else changes once eff and anti are both on).
   var entries = [
-    entry('s_eff', 0, 0, { isEffector: true, range: 4 }),
-    entry('tie_anti', 4, 0, { isAntiEffector: true, range: 4 }),
-    entry('T', 2, 0, { range: 4 }),
+    entry('trigger', -5, -1, { isEffector: true, range: 3 }),
+    entry('eff', -4, -4, { isEffector: true, range: 4 }),
+    entry('anti', -4, 1, { isAntiEffector: true, range: 4 }),
+    entry('T', -1, -3, { range: 4 }),
   ];
   var reaches = computeReaches(entries);
-  var result = simulate(entries, reaches, 's_eff', { maxPasses: 2 });
+  var result = simulate(entries, reaches, 'trigger');
 
-  expect(result.passes[0].effects.map((e) => e.to.placement.id).sort()).toEqual(['T', 'tie_anti']);
-  // tie_anti does get activated on pass 2's edges too, but T specifically
-  // has no effect logged for it this pass — the tie cancelled out.
-  expect(result.passes[1].effects.some((e) => e.to.placement.id === 'T')).toBe(false);
-  expect(result.active.T).toBe(true);
+  expect(result.active).toEqual({ trigger: true, eff: true, anti: true, T: false });
+  expect(result.passes).toHaveLength(1);
+  expect(result.passes[0].effects.map((e) => e.to.placement.id).sort()).toEqual(['anti', 'eff']);
 });
 
 test('simulate stops at the pass cap and reports stabilized: false when still changing', () => {

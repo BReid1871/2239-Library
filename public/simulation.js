@@ -46,26 +46,38 @@
   // its reach) turns on as the first pass, then every effector/anti-effector
   // that's now active fires at once on a later pass, and so on until nothing
   // changes — so a newly-activated effector can reach further placements on
-  // a later pass.
+  // a later pass. A pass's *roster* of sources — who is active and an
+  // effector/anti-effector when the pass begins — is fixed for the whole
+  // pass: everyone on it keeps acting (or stops, if deactivated) using that
+  // same roster until nothing changes anymore, however many rounds that
+  // takes internally, all reported together as one pass. A new numbered
+  // pass only starts once a placement outside that roster — someone who
+  // wasn't already active and an effector/anti-effector when the pass
+  // began — newly turns on and joins the ranks; that's the only thing that
+  // can make some *other* target newly reachable, which is what the pass
+  // boundary is really tracking.
   //
-  // Within one pass, all of a target's active-sourced reaches fire
-  // together: they're grouped by distance (closest first) and swept in
-  // that order. Distance only matters where two *opposing* kinds actually
-  // conflict — a farther group of the opposite kind overrides a closer
-  // one's decision, since it's acting on top of it, discarding that closer
-  // decision entirely (it's been superseded, not reinforced). A farther
-  // group of the *same* kind as the current decision isn't a conflict at
-  // all, so it doesn't override anything — it just joins it, credited
-  // alongside whatever closer same-kind sources already decided this
-  // (e.g. two different anti-effectors at two different distances both
-  // deactivating the same target both show up as having done so). A group
-  // that mixes both kinds at the exact same distance cancels itself out
-  // (effector and anti-effector arriving simultaneously do nothing) and
-  // simply passes through whatever the closer groups had already decided,
-  // rather than overriding it. Capped at `opts.maxPasses` (default
-  // entries.length + 1) so a cyclic activate/deactivate chain can't loop
-  // forever — `stabilized: false` in the result means the cap was hit
-  // while things were still changing.
+  // Within a round, all of a target's currently-active-sourced reaches
+  // fire together: they're grouped by distance (closest first) and swept
+  // in that order. Distance only matters where two *opposing* kinds
+  // actually conflict — a farther group of the opposite kind overrides a
+  // closer one's decision, since it's acting on top of it, discarding that
+  // closer decision entirely (it's been superseded, not reinforced). A
+  // farther group of the *same* kind as the current decision isn't a
+  // conflict at all, so it doesn't override anything — it just joins it,
+  // credited alongside whatever closer same-kind sources already decided
+  // this (e.g. two different anti-effectors at two different distances
+  // both deactivating the same target both show up as having done so). A
+  // group that mixes both kinds at the exact same distance cancels itself
+  // out (effector and anti-effector arriving simultaneously do nothing)
+  // and simply passes through whatever the closer groups had already
+  // decided, rather than overriding it.
+  //
+  // Both loops are capped — rounds within a pass at `entries.length + 1`,
+  // passes at `opts.maxPasses` (default `entries.length + 1`) — so neither
+  // a within-roster oscillation nor an ever-growing chain of newly-joining
+  // sources can loop forever; `stabilized: false` in the result means a cap
+  // was hit while things were still changing.
   function resolveTarget(edgesToTarget, before, targetId) {
     var byDistance = {};
     var distances = [];
@@ -99,16 +111,25 @@
 
   function simulate(entries, reaches, startPlacementId, opts) {
     var maxPasses = (opts && opts.maxPasses) || entries.length + 1;
+    var maxRounds = entries.length + 1;
     var active = {};
     entries.forEach(function (e) { active[e.placement.id] = false; });
     if (!(startPlacementId in active)) return null;
     active[startPlacementId] = true;
 
-    var passes = [];
-    var stabilized = true;
-    for (var pass = 1; pass <= maxPasses; pass++) {
+    function activeSourceIds() {
+      var ids = {};
+      entries.forEach(function (e) {
+        if (active[e.placement.id] && (e.placement.isEffector || e.placement.isAntiEffector)) ids[e.placement.id] = true;
+      });
+      return ids;
+    }
+
+    // One round: every currently-active member of `roster` fires at once;
+    // returns this round's effects (empty once nothing changes).
+    function runRound(roster) {
       var before = Object.assign({}, active);
-      var edges = reaches.filter(function (r) { return before[r.from.placement.id]; });
+      var edges = reaches.filter(function (r) { return roster[r.from.placement.id] && before[r.from.placement.id]; });
       var byTarget = {};
       var targetIds = [];
       edges.forEach(function (r) {
@@ -129,9 +150,29 @@
           becameActive: resolution.becameActive,
         });
       });
+      return effects;
+    }
 
-      if (effects.length === 0) break;
-      passes.push({ pass: pass, effects: effects });
+    var passes = [];
+    var stabilized = true;
+    var roster = activeSourceIds();
+    for (var pass = 1; pass <= maxPasses; pass++) {
+      var passEffects = [];
+      var roundStabilized = true;
+      for (var round = 1; round <= maxRounds; round++) {
+        var roundEffects = runRound(roster);
+        if (roundEffects.length === 0) break;
+        passEffects = passEffects.concat(roundEffects);
+        if (round === maxRounds) roundStabilized = false;
+      }
+      if (passEffects.length === 0) break;
+      passes.push({ pass: pass, effects: passEffects });
+      if (!roundStabilized) { stabilized = false; break; }
+
+      var nextRoster = activeSourceIds();
+      var grew = Object.keys(nextRoster).some(function (id) { return !roster[id]; });
+      if (!grew) break; // same roster would just repeat the same, now-stable, resolution
+      roster = nextRoster;
       if (pass === maxPasses) stabilized = false;
     }
     return { active: active, passes: passes, stabilized: stabilized };

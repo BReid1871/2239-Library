@@ -102,18 +102,26 @@ they default to `library_test` on localhost if no env vars are set.
   gates who can *start* a simulation — a non-triggerable ritual can still
   be activated by an effector, just not directly by a person — so
   `arrays.html`'s Simulations panel only offers one simulation per
-  triggerable placement in the array. Within a pass, all of a target's
-  active-sourced reaches fire at once, grouped by distance closest-first;
-  distance only matters where two *opposing* kinds actually conflict — a
-  farther group of the opposite kind overrides a closer one's decision
-  entirely (it's superseded, not reinforced), and a group that mixes both
-  kinds at the exact same distance cancels out and changes nothing,
-  leaving whatever the closer groups had already decided. A farther group
-  of the *same* kind as the current decision isn't a conflict, so it
-  doesn't override — it joins it, credited alongside every other same-kind
-  source that already decided this (e.g. two different anti-effectors at
-  two different distances both deactivating one target both show up as
-  having done so, in the Simulations panel's per-pass log).
+  triggerable placement in the array. A pass's *roster* — whoever is
+  active and an effector/anti-effector when the pass begins — is fixed for
+  that whole pass: everyone on it keeps acting (or drops out, if
+  deactivated) using that same roster, internally over as many rounds as
+  it takes to stop changing, all reported together as one pass. A new
+  numbered pass only starts once a placement *outside* that roster newly
+  turns on and joins the ranks — that's the only thing that can make some
+  other target newly reachable. Within a round, all of a target's
+  currently-active-sourced reaches fire together, grouped by distance
+  closest-first; distance only matters where two *opposing* kinds
+  actually conflict — a farther group of the opposite kind overrides a
+  closer one's decision entirely (it's superseded, not reinforced), and a
+  group that mixes both kinds at the exact same distance cancels out and
+  changes nothing, leaving whatever the closer groups had already
+  decided. A farther group of the *same* kind as the current decision
+  isn't a conflict, so it doesn't override — it joins it, credited
+  alongside every other same-kind source that already decided this (e.g.
+  two different anti-effectors at two different distances both
+  deactivating one target both show up as having done so, in the
+  Simulations panel's per-pass log).
 - `tests/helpers/testDb.js` — the shared MySQL pool integration tests use,
   reset with `TRUNCATE` in each test's `beforeEach` (see
   `vitest.config.js`'s `fileParallelism: false` — test files run
