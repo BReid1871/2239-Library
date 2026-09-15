@@ -87,13 +87,18 @@ they default to `library_test` on localhost if no env vars are set.
   between `arrays.html`'s hex board, the `server/routes/arrays.js`/`data.js`
   board-radius guard rail, and its own unit tests. Ritual size is a
   property of an array *placement* (`{ id, ritualId, q, r, size,
-  isEffector, isAntiEffector }` in `arrays.placements`), not of the ritual
-  itself — the same ritual can be placed at different sizes. `isEffector`
-  and `isAntiEffector` (both default false, mutually exclusive) mark which
-  placements originate directional reach lines to other rituals within
-  range — most placements just sit there and can be reached, but don't
-  reach out themselves. An effector *activates* what it reaches; an
-  anti-effector *deactivates* it.
+  isEffector, isAntiEffector, condition }` in `arrays.placements`), not of
+  the ritual itself — the same ritual can be placed at different sizes.
+  `isEffector` and `isAntiEffector` (both default false, mutually
+  exclusive) mark which placements originate directional reach lines to
+  other rituals within range — most placements just sit there and can be
+  reached, but don't reach out themselves. An effector *activates* what it
+  reaches; an anti-effector *deactivates* it. `condition` (default empty —
+  unconditional) is an optional free-text condition, independent per
+  placement (no shared/linked pool, and at most one per placement), gating
+  whether that placement's effector/anti-effector role actually functions
+  — for something the array itself can't model (e.g. "only at night");
+  see `simulateBranches` below for how that plays out in a simulation.
 - `public/simulation.js` — shared with `hex.js`'s UMD pattern: computes the
   reach graph (`computeReaches`, generalizing effector/anti-effector
   reaches with a `kind`) and simulates what happens when a person triggers
@@ -121,7 +126,16 @@ they default to `library_test` on localhost if no env vars are set.
   alongside every other same-kind source that already decided this (e.g.
   two different anti-effectors at two different distances both
   deactivating one target both show up as having done so, in the
-  Simulations panel's per-pass log).
+  Simulations panel's per-pass log). `simulateBranches` runs `simulate`
+  once per combination of every conditioned placement's condition being
+  met or not (`conditionedEntries`, `MAX_CONDITIONED = 8` caps the 2^N
+  enumeration) — passed to `simulate` as `opts.disabledSourceIds`, a set
+  of placement ids to treat as non-sources for that run without touching
+  `computeReaches`, which stays a purely geometric, condition-independent
+  picture of what the board can always show while editing. `arrays.html`'s
+  Simulations panel only branches a triggerable's entry into "Scenarios"
+  when the array has 1–8 conditioned placements; otherwise it shows the
+  plain, single-result simulation exactly as when there are none.
 - `tests/helpers/testDb.js` — the shared MySQL pool integration tests use,
   reset with `TRUNCATE` in each test's `beforeEach` (see
   `vitest.config.js`'s `fileParallelism: false` — test files run

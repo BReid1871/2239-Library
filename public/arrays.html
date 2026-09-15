@@ -23,6 +23,7 @@
 .hex-cell.preview-footprint { fill: var(--accent); fill-opacity: 0.35; stroke: var(--accent); stroke-width: 2; }
 .hex-reach-line { stroke: var(--accent); stroke-width: 1.5; opacity: 0.55; pointer-events: none; }
 .hex-reach-line.anti { stroke: #dc2626; stroke-dasharray: 4 3; }
+.hex-reach-line.conditional { opacity: 0.3; }
 .hex-arrowhead { fill: var(--accent); opacity: 0.55; }
 .hex-arrowhead.anti { fill: #dc2626; }
 .hex-order-badge circle { fill: var(--accent); stroke: var(--bg2); stroke-width: 1.5; }
@@ -44,6 +45,15 @@
 .simulation-roster-dot.active { background: var(--accent); }
 .simulation-roster-dot.inactive { background: var(--border2); }
 .simulation-empty { font-size: 11px; color: var(--text3); padding: 8px 10px; }
+.scenario-list { margin-top: 6px; border: 0.5px solid var(--border); border-radius: var(--radius); background: var(--bg); }
+.scenario-entry { border-bottom: 0.5px solid var(--border); }
+.scenario-entry:last-child { border-bottom: none; }
+.scenario-entry-header { display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; cursor: pointer; user-select: none; font-size: 11px; }
+.scenario-entry-header:hover { color: var(--accent); }
+.scenario-entry-body { padding: 0 8px 6px; font-size: 11px; }
+.condition-badge { font-size: 10px; padding: 1px 8px; background: var(--bg2); color: var(--text3); border: 0.5px dashed var(--border2); border-radius: 99px; }
+.condition-input { width: 100%; font-size: 11px; padding: 3px 6px; margin-top: 4px; border: 0.5px solid var(--border2); border-radius: 5px; background: var(--bg); color: var(--text); outline: none; }
+.condition-input:focus { border-color: var(--accent); }
 .placement-list { width: 210px; flex-shrink: 0; height: 560px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .placement-item { display: flex; align-items: flex-start; gap: 6px; padding: 7px 9px; border-radius: var(--radius); background: var(--bg2); border: 0.5px solid var(--border); }
 .placement-item-body { flex: 1; min-width: 0; }
@@ -270,6 +280,7 @@ function openArray(id) {
   currentArrayId = id;
   zoomLevel = 1;
   simulationOpenIds = {};
+  scenarioOpenIds = {};
   renderArrayList();
   renderArrayEditor(arr);
 }
@@ -426,9 +437,10 @@ function renderHexBoard(arr, placements, zoom, reaches) {
     reach.line = seg;
 
     var isAnti = reach.kind === 'anti-effector';
+    var isConditional = !!reach.from.placement.condition;
     var line = svgEl('line', {
       x1: seg.x1, y1: seg.y1, x2: seg.x2, y2: seg.y2,
-      class: 'hex-reach-line' + (isAnti ? ' anti' : ''),
+      class: 'hex-reach-line' + (isAnti ? ' anti' : '') + (isConditional ? ' conditional' : ''),
       'marker-end': isAnti ? 'url(#reach-arrowhead-anti)' : 'url(#reach-arrowhead)',
     });
     svg.appendChild(line);
@@ -436,13 +448,14 @@ function renderHexBoard(arr, placements, zoom, reaches) {
   reaches.forEach(function(reach) {
     var mx = (reach.line.x1 + reach.line.x2) / 2, my = (reach.line.y1 + reach.line.y2) / 2;
     var verb = reach.kind === 'anti-effector' ? 'Deactivates' : 'Activates';
+    var conditionSuffix = reach.from.placement.condition ? ' (if ' + reach.from.placement.condition + ')' : '';
     var g = svgEl('g', { class: 'hex-order-badge' + (reach.kind === 'anti-effector' ? ' anti' : '') });
     g.appendChild(svgEl('circle', { cx: mx, cy: my, r: 7.5 }));
     var text = svgEl('text', { x: mx, y: my });
     text.textContent = reach.order;
     g.appendChild(text);
     var title = svgEl('title', {});
-    title.textContent = reach.order + '. ' + reach.from.displayName + ' ' + verb + ' ' + reach.to.displayName + ' (distance ' + reach.distance + ')';
+    title.textContent = reach.order + '. ' + reach.from.displayName + ' ' + verb + ' ' + reach.to.displayName + ' (distance ' + reach.distance + ')' + conditionSuffix;
     g.appendChild(title);
     svg.appendChild(g);
   });
@@ -496,7 +509,8 @@ function renderResolutionLog(reaches) {
       reaches.forEach(function(reach) {
         var li = document.createElement('li');
         var verb = reach.kind === 'anti-effector' ? 'Deactivates' : 'Activates';
-        li.textContent = reach.from.displayName + ' ' + verb + ' ' + reach.to.displayName + ' (distance ' + reach.distance + ')';
+        var conditionSuffix = reach.from.placement.condition ? ' (if ' + reach.from.placement.condition + ')' : '';
+        li.textContent = reach.from.displayName + ' ' + verb + ' ' + reach.to.displayName + ' (distance ' + reach.distance + ')' + conditionSuffix;
         ol.appendChild(li);
       });
       body.appendChild(ol);
@@ -513,12 +527,87 @@ function renderResolutionLog(reaches) {
 // array-wide one.
 var simulationOpenIds = {};
 
+// Which conditional Scenario branches are expanded — keyed by
+// "<placementId>|<branch index>", reset alongside simulationOpenIds.
+var scenarioOpenIds = {};
+
+// Appends a simulation result's pass-by-pass effect log and final
+// active/inactive roster into `body` — shared between the plain
+// (unconditional) simulation and each Scenario branch below, so the two
+// render identically apart from which Simulation.simulate() result they're
+// given.
+function renderSimulationResult(body, placements, result, triggerDisplayName) {
+  if (!result.stabilized) {
+    var warning = document.createElement('div');
+    warning.className = 'simulation-warning';
+    warning.textContent = 'Effects kept changing and didn’t settle after ' + result.passes.length + ' passes — showing the state so far.';
+    body.appendChild(warning);
+  }
+
+  if (result.passes.length === 0) {
+    var noEffects = document.createElement('div');
+    noEffects.style.cssText = 'color:var(--text3);margin-bottom:6px;';
+    noEffects.textContent = 'Triggering ' + triggerDisplayName + ' has no further effect on anything else in the array.';
+    body.appendChild(noEffects);
+  } else {
+    result.passes.forEach(function(pass) {
+      var passLabel = document.createElement('div');
+      passLabel.style.cssText = 'font-weight:500;margin-top:4px;';
+      passLabel.textContent = 'Pass ' + pass.pass;
+      body.appendChild(passLabel);
+      var passList = document.createElement('ul');
+      passList.style.cssText = 'padding-left:16px;line-height:1.6;margin:0 0 4px;';
+      pass.effects.forEach(function(effect) {
+        var li = document.createElement('li');
+        var verb = effect.kind === 'anti-effector' ? 'deactivates' : 'activates';
+        var fromNames = effect.edges.map(function(e) { return e.from.displayName; }).join(', ');
+        li.textContent = fromNames + ' ' + verb + ' ' + effect.to.displayName;
+        passList.appendChild(li);
+      });
+      body.appendChild(passList);
+    });
+  }
+
+  var rosterLabel = document.createElement('div');
+  rosterLabel.style.cssText = 'font-weight:500;margin-top:6px;';
+  rosterLabel.textContent = 'Final state';
+  body.appendChild(rosterLabel);
+  placements.forEach(function(rosterEntry) {
+    var isActive = !!result.active[rosterEntry.placement.id];
+    var row = document.createElement('div');
+    row.className = 'simulation-roster-item';
+    var dot = document.createElement('span');
+    dot.className = 'simulation-roster-dot ' + (isActive ? 'active' : 'inactive');
+    var label = document.createElement('span');
+    label.textContent = rosterEntry.displayName + ' — ' + (isActive ? 'Active' : 'Inactive');
+    row.appendChild(dot); row.appendChild(label);
+    body.appendChild(row);
+  });
+}
+
+// A short label for one branch of a conditional simulation — lists each
+// conditioned placement's own condition text and whether it's met this
+// branch, or the "all met"/"all unmet" shorthand for those two common ends
+// of the range.
+function describeBranch(assignment) {
+  if (assignment.every(function(a) { return a.met; })) return 'All conditions met';
+  if (assignment.every(function(a) { return !a.met; })) return 'No conditions met';
+  return assignment.map(function(a) {
+    return a.entry.displayName + ': ' + a.entry.placement.condition + ' (' + (a.met ? 'met' : 'not met') + ')';
+  }).join(', ');
+}
+
 // One collapsible entry per triggerable placement, each running
 // Simulation.simulate() (public/simulation.js) starting from that placement
 // and showing the pass-by-pass effect log plus the final active/inactive
 // state of every placement in the array — "what happens if a person
 // triggers this ritual". Reaches are the same ones the board/resolution log
 // already computed, so the simulation never disagrees with what's drawn.
+// When the array has any conditional effectors/anti-effectors (an
+// effector/anti-effector role gated on something outside the array's own
+// model, e.g. "only at night"), each triggerable instead branches into one
+// Scenario per combination of those conditions being met or not, since
+// which of them hold isn't something the array itself can know.
 function renderSimulations(arr, placements, reaches) {
   var wrap = document.createElement('div');
   wrap.className = 'simulation-panel';
@@ -536,6 +625,9 @@ function renderSimulations(arr, placements, reaches) {
     wrap.appendChild(empty);
     return wrap;
   }
+
+  var conditioned = Simulation.conditionedEntries(placements);
+  var branchable = conditioned.length > 0 && conditioned.length <= Simulation.MAX_CONDITIONED;
 
   triggerables.forEach(function(entry) {
     var placementId = entry.placement.id;
@@ -561,54 +653,58 @@ function renderSimulations(arr, placements, reaches) {
     if (isOpen) {
       var body = document.createElement('div');
       body.className = 'simulation-entry-body';
-      var result = Simulation.simulate(placements, reaches, placementId);
 
-      if (!result.stabilized) {
-        var warning = document.createElement('div');
-        warning.className = 'simulation-warning';
-        warning.textContent = 'Effects kept changing and didn’t settle after ' + result.passes.length + ' passes — showing the state so far.';
-        body.appendChild(warning);
+      if (conditioned.length > Simulation.MAX_CONDITIONED) {
+        var capNote = document.createElement('div');
+        capNote.className = 'simulation-warning';
+        capNote.textContent = 'This array has more than ' + Simulation.MAX_CONDITIONED + ' conditional effectors/anti-effectors — too many combinations to show separately, so conditions are ignored below.';
+        body.appendChild(capNote);
       }
 
-      if (result.passes.length === 0) {
-        var noEffects = document.createElement('div');
-        noEffects.style.cssText = 'color:var(--text3);margin-bottom:6px;';
-        noEffects.textContent = 'Triggering ' + entry.displayName + ' has no further effect on anything else in the array.';
-        body.appendChild(noEffects);
+      if (!branchable) {
+        var result = Simulation.simulate(placements, reaches, placementId);
+        renderSimulationResult(body, placements, result, entry.displayName);
       } else {
-        result.passes.forEach(function(pass) {
-          var passLabel = document.createElement('div');
-          passLabel.style.cssText = 'font-weight:500;margin-top:4px;';
-          passLabel.textContent = 'Pass ' + pass.pass;
-          body.appendChild(passLabel);
-          var passList = document.createElement('ul');
-          passList.style.cssText = 'padding-left:16px;line-height:1.6;margin:0 0 4px;';
-          pass.effects.forEach(function(effect) {
-            var li = document.createElement('li');
-            var verb = effect.kind === 'anti-effector' ? 'deactivates' : 'activates';
-            var fromNames = effect.edges.map(function(e) { return e.from.displayName; }).join(', ');
-            li.textContent = fromNames + ' ' + verb + ' ' + effect.to.displayName;
-            passList.appendChild(li);
-          });
-          body.appendChild(passList);
-        });
-      }
+        var branches = Simulation.simulateBranches(placements, reaches, placementId);
+        var scenarioList = document.createElement('div');
+        scenarioList.className = 'scenario-list';
+        var scenarioHeader = document.createElement('div');
+        scenarioHeader.style.cssText = 'padding:5px 8px;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.03em;';
+        scenarioHeader.textContent = 'Scenarios (' + branches.length + ')';
+        scenarioList.appendChild(scenarioHeader);
 
-      var rosterLabel = document.createElement('div');
-      rosterLabel.style.cssText = 'font-weight:500;margin-top:6px;';
-      rosterLabel.textContent = 'Final state';
-      body.appendChild(rosterLabel);
-      placements.forEach(function(rosterEntry) {
-        var isActive = !!result.active[rosterEntry.placement.id];
-        var row = document.createElement('div');
-        row.className = 'simulation-roster-item';
-        var dot = document.createElement('span');
-        dot.className = 'simulation-roster-dot ' + (isActive ? 'active' : 'inactive');
-        var label = document.createElement('span');
-        label.textContent = rosterEntry.displayName + ' — ' + (isActive ? 'Active' : 'Inactive');
-        row.appendChild(dot); row.appendChild(label);
-        body.appendChild(row);
-      });
+        branches.forEach(function(branch, i) {
+          var scenarioKey = placementId + '|' + i;
+          var scenarioOpen = !!scenarioOpenIds[scenarioKey];
+
+          var scenarioEl = document.createElement('div');
+          scenarioEl.className = 'scenario-entry';
+          var scenarioHead = document.createElement('div');
+          scenarioHead.className = 'scenario-entry-header';
+          var scenarioLabel = document.createElement('span');
+          scenarioLabel.textContent = describeBranch(branch.assignment);
+          var scenarioArrow = document.createElement('span');
+          scenarioArrow.textContent = scenarioOpen ? '▾' : '▸';
+          scenarioHead.appendChild(scenarioLabel);
+          scenarioHead.appendChild(scenarioArrow);
+          scenarioHead.onclick = function() {
+            scenarioOpenIds[scenarioKey] = !scenarioOpen;
+            renderArrayEditor(arr);
+          };
+          scenarioEl.appendChild(scenarioHead);
+
+          if (scenarioOpen) {
+            var scenarioBody = document.createElement('div');
+            scenarioBody.className = 'scenario-entry-body';
+            renderSimulationResult(scenarioBody, placements, branch.result, entry.displayName);
+            scenarioEl.appendChild(scenarioBody);
+          }
+
+          scenarioList.appendChild(scenarioEl);
+        });
+
+        body.appendChild(scenarioList);
+      }
 
       entryEl.appendChild(body);
     }
@@ -639,6 +735,7 @@ function exportBoardAsPng(arr) {
     '.hex-cell { fill: ' + cs.getPropertyValue('--bg') + '; stroke: ' + cs.getPropertyValue('--border2') + '; stroke-width: 1; }' +
     '.hex-reach-line { stroke: ' + cs.getPropertyValue('--accent') + '; stroke-width: 1.5; opacity: 0.55; }' +
     '.hex-reach-line.anti { stroke: #dc2626; stroke-dasharray: 4 3; }' +
+    '.hex-reach-line.conditional { opacity: 0.3; }' +
     '.hex-arrowhead { fill: ' + cs.getPropertyValue('--accent') + '; opacity: 0.55; }' +
     '.hex-arrowhead.anti { fill: #dc2626; }' +
     '.hex-order-badge circle { fill: ' + cs.getPropertyValue('--accent') + '; stroke: ' + cs.getPropertyValue('--bg2') + '; stroke-width: 1.5; }' +
@@ -748,8 +845,34 @@ function renderPlacementList(arr, placements) {
       nonTriggerableBadge.title = 'Can only be activated by an effector, not by a person — edit this on the ritual itself.';
       metaRow.appendChild(nonTriggerableBadge);
     }
+    if (entry.placement.condition) {
+      var conditionBadge = document.createElement('span');
+      conditionBadge.className = 'condition-badge';
+      conditionBadge.textContent = 'if: ' + entry.placement.condition;
+      conditionBadge.title = 'Only functions as an effector/anti-effector when this (outside the array’s own model) is met.';
+      metaRow.appendChild(conditionBadge);
+    }
 
     body.appendChild(name); body.appendChild(metaRow);
+
+    // Only meaningful once a placement is actually an effector or
+    // anti-effector — a condition on a plain placement would do nothing.
+    if (entry.placement.isEffector || entry.placement.isAntiEffector) {
+      var conditionInput = document.createElement('input');
+      conditionInput.type = 'text';
+      conditionInput.className = 'condition-input';
+      conditionInput.placeholder = 'Condition (optional) — e.g. "Night"';
+      conditionInput.value = entry.placement.condition || '';
+      conditionInput.oninput = function() {
+        entry.placement.condition = conditionInput.value;
+        saveArrayDebounced(arr);
+      };
+      // Re-render on blur (not on every keystroke) so the condition badge
+      // and the Simulations panel's branch count catch up without
+      // rebuilding the input mid-type and losing focus/cursor position.
+      conditionInput.onblur = function() { renderArrayEditor(arr); };
+      body.appendChild(conditionInput);
+    }
 
     var sizeRow = document.createElement('div');
     sizeRow.className = 'placement-item-size';
