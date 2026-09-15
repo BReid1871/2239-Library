@@ -49,6 +49,21 @@ window.getRune = function(name) {
   return null;
 };
 
+// Theme: 'light'/'dark' once the user picks one explicitly (persisted and
+// applied via a data-theme attribute, see shared.css); otherwise follows the
+// OS setting live, matching prior behavior.
+window.getEffectiveTheme = function() {
+  var stored = null;
+  try { stored = localStorage.getItem('theme'); } catch { /* unavailable */ }
+  if (stored === 'light' || stored === 'dark') return stored;
+  return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+};
+
+window.setTheme = function(theme) {
+  try { localStorage.setItem('theme', theme); } catch { /* unavailable */ }
+  document.documentElement.setAttribute('data-theme', theme);
+};
+
 // Renders the top nav bar shared by all three pages. `localKeys` lists which
 // items are in-page tabs on the current page (handled by `onTabClick`); every
 // other item is a plain link to the page that owns it.
@@ -72,4 +87,20 @@ window.renderNav = function(containerId, activeKey, localKeys, onTabClick) {
     else node.href = item.href;
     el.appendChild(node);
   });
+
+  var toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'theme-toggle';
+  var updateToggle = function() {
+    var isDark = window.getEffectiveTheme() === 'dark';
+    toggle.textContent = isDark ? '☀' : '🌙';
+    toggle.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+    toggle.setAttribute('aria-label', toggle.title);
+  };
+  toggle.onclick = function() {
+    window.setTheme(window.getEffectiveTheme() === 'dark' ? 'light' : 'dark');
+    updateToggle();
+  };
+  updateToggle();
+  el.appendChild(toggle);
 };

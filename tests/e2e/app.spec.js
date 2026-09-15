@@ -28,3 +28,19 @@ test('adding a ritual persists in the database, not just this browser session', 
   await expect(freshPage.locator('.rli-name', { hasText: 'E2E Test Ritual' })).toBeVisible();
   await freshContext.close();
 });
+
+test('the theme toggle switches and persists across reload', async ({ page }) => {
+  await page.goto('/');
+  const html = page.locator('html');
+  const toggle = page.locator('.theme-toggle');
+
+  await expect(html).not.toHaveAttribute('data-theme', /.+/);
+  await toggle.click();
+  await expect(html).toHaveAttribute('data-theme', 'dark');
+
+  await page.reload();
+  await expect(html).toHaveAttribute('data-theme', 'dark');
+
+  await page.locator('.theme-toggle').click();
+  await expect(html).toHaveAttribute('data-theme', 'light');
+});
