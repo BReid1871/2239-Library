@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { rangeForSize, footprintHexes, hexDistance, hexDisk } from '../../public/hex.js';
+import { rangeForSize, footprintHexes, hexDistance, hexDisk, offsetSegment, shortenSegment } from '../../public/hex.js';
 
 test.each([
   [1, 2],
@@ -42,4 +42,21 @@ test('hexDistance between adjacent hexes is 1', () => {
 
 test('hexDisk radius 0 returns only the center', () => {
   expect(hexDisk({ q: 5, r: -5 }, 0)).toEqual([{ q: 5, r: -5 }]);
+});
+
+test('offsetSegment shifts a horizontal line perpendicular to itself', () => {
+  var seg = offsetSegment(0, 0, 10, 0, 3);
+  expect(seg).toEqual({ x1: 0, y1: 3, x2: 10, y2: 3 });
+});
+
+test('offsetSegment puts a mutual pair of reversed segments on opposite sides', () => {
+  var forward = offsetSegment(0, 0, 10, 0, 3);
+  var reverse = offsetSegment(10, 0, 0, 0, 3);
+  expect(forward.y1).toBe(3);
+  expect(reverse.y1).toBe(-3);
+});
+
+test('shortenSegment pulls both ends inward along the line', () => {
+  var seg = shortenSegment(0, 0, 10, 0, 2, 3);
+  expect(seg).toEqual({ x1: 2, y1: 0, x2: 7, y2: 0 });
 });
