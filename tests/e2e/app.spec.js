@@ -87,6 +87,123 @@ test('array reach lines only originate from placements marked as effectors, and 
   await request.delete(`/api/arrays/${arr.id}`);
 });
 
+test('the resolution log lists reaches as text, matching the board', async ({ page, request }) => {
+  const ritualA = await (await request.post('/api/rituals', { data: {
+    name: 'Log Source', purpose: 'Enchantment', primary: 'Nadir', subs: [], effect: 'a',
+  } })).json();
+  const ritualB = await (await request.post('/api/rituals', { data: {
+    name: 'Log Target', purpose: 'Familiar/Summoning', primary: 'Genesis', subs: [], effect: 'b',
+  } })).json();
+  const arr = await (await request.post('/api/arrays', { data: {
+    name: 'E2E Log Array',
+    radius: 2,
+    placements: [
+      { id: 'p1', ritualId: ritualA.id, q: 0, r: 0, size: 1, isEffector: true },
+      { id: 'p2', ritualId: ritualB.id, q: 1, r: 0, size: 1, isEffector: false },
+    ],
+  } })).json();
+
+  await page.goto('/arrays.html');
+  await page.locator('.array-card', { hasText: 'E2E Log Array' }).click();
+
+  await expect(page.locator('text=Resolution order (1)')).toBeVisible();
+  await expect(page.locator('li', { hasText: 'Log Source → Log Target (distance 1)' })).toBeVisible();
+
+  // Collapsing hides the list but keeps the count visible in the header.
+  await page.locator('text=Resolution order (1)').click();
+  await expect(page.locator('li', { hasText: 'Log Source → Log Target (distance 1)' })).toBeHidden();
+
+  await request.delete(`/api/arrays/${arr.id}`);
+});
+
+test('the range preview highlights the board while the ritual picker is open', async ({ page, request }) => {
+  const arr = await (await request.post('/api/arrays', { data: { name: 'E2E Preview Array', radius: 4, placements: [] } })).json();
+
+  await page.goto('/arrays.html');
+  await page.locator('.array-card', { hasText: 'E2E Preview Array' }).click();
+  await page.waitForSelector('#hex-board-svg');
+
+  await expect(page.locator('.hex-cell.preview-footprint, .hex-cell.preview-range')).toHaveCount(0);
+
+  await page.locator('.hex-cell').first().click();
+  await page.waitForSelector('#ritual-picker');
+  const countAtSizeOne = await page.locator('.hex-cell.preview-footprint, .hex-cell.preview-range').count();
+  expect(countAtSizeOne).toBeGreaterThan(0);
+
+  await page.locator('.picker-size-row button', { hasText: '+' }).click();
+  const countAtSizeTwo = await page.locator('.hex-cell.preview-footprint, .hex-cell.preview-range').count();
+  expect(countAtSizeTwo).toBeGreaterThan(countAtSizeOne);
+
+  await page.locator('.array-picker-cancel button').click();
+  await expect(page.locator('.hex-cell.preview-footprint, .hex-cell.preview-range')).toHaveCount(0);
+
+  await request.delete(`/api/arrays/${arr.id}`);
+});
+
+test('duplicating an array clones its placements under a new id', async ({ page, request }) => {
+  const ritual = await (await request.post('/api/rituals', { data: {
+    name: 'Dup Ritual', purpose: 'Bailiwick', primary: 'Coda', subs: [], effect: 'a',
+  } })).json();
+  const arr = await (await request.post('/api/arrays', { data: {
+    name: 'E2E Duplicate Array', radius: 2, placements: [{ id: 'p1', ritualId: ritual.id, q: 0, r: 0, size: 1, isEffector: false }],
+  } })).json();
+
+  await page.goto('/arrays.html');
+  await page.locator('.array-card', { hasText: 'E2E Duplicate Array' }).first().click();
+  await page.locator('button', { hasText: 'Duplicate' }).click();
+
+  const copyCard = page.locator('.array-card', { hasText: 'E2E Duplicate Array (copy)' });
+  await expect(copyCard).toBeVisible();
+  await expect(copyCard.locator('.array-card-meta')).toContainText('1 ritual');
+  // The duplicate opens automatically and keeps the same placement data.
+  await expect(page.locator('.placement-item-name', { hasText: 'Dup Ritual' })).toBeVisible();
+
+  const arrays = await (await request.get('/api/arrays')).json();
+  const original = arrays.find((a) => a.id === arr.id);
+  const copy = arrays.find((a) => a.name === 'E2E Duplicate Array (copy)');
+  expect(copy.placements[0].id).not.toBe(original.placements[0].id);
+
+  await request.delete(`/api/arrays/${arr.id}`);
+  await request.delete(`/api/arrays/${copy.id}`);
+});
+
+test('exporting an array downloads a PNG named after it', async ({ page, request }) => {
+  const arr = await (await request.post('/api/arrays', { data: { name: 'E2E Export Array', radius: 2, placements: [] } })).json();
+
+  await page.goto('/arrays.html');
+  await page.locator('.array-card', { hasText: 'E2E Export Array' }).click();
+  await page.waitForSelector('#hex-board-svg');
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('button', { hasText: 'Export PNG' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe('E2E_Export_Array.png');
+
+  await request.delete(`/api/arrays/${arr.id}`);
+});
+
+test('a ritual detail page links back to arrays it is placed in', async ({ page, request }) => {
+  const ritual = await (await request.post('/api/rituals', { data: {
+    name: 'Backlink Ritual', purpose: 'Bailiwick', primary: 'Vigour', subs: [], effect: 'a',
+  } })).json();
+  const arr = await (await request.post('/api/arrays', { data: {
+    name: 'E2E Backlink Array', radius: 2, placements: [{ id: 'p1', ritualId: ritual.id, q: 0, r: 0, size: 1, isEffector: false }],
+  } })).json();
+
+  await page.goto('/');
+  await page.locator('.rli-name', { hasText: 'Backlink Ritual' }).click();
+
+  const link = page.locator('#detail-content a', { hasText: 'E2E Backlink Array' });
+  await expect(link).toHaveAttribute('href', `arrays.html?open=${arr.id}`);
+
+  await link.click();
+  await page.waitForSelector('#hex-board-svg');
+  await expect(page.locator('.array-name-input')).toHaveValue('E2E Backlink Array');
+
+  await request.delete(`/api/arrays/${arr.id}`);
+});
+
 test('Ctrl+scroll zooms the array board; a plain scroll does not', async ({ page, request }) => {
   const arr = await (await request.post('/api/arrays', { data: { name: 'E2E Zoom Array', radius: 5, placements: [] } })).json();
 

@@ -16,6 +16,8 @@
 .hex-cell { fill: var(--bg); stroke: var(--border2); stroke-width: 1; cursor: pointer; transition: fill 0.1s, stroke 0.1s; }
 .hex-cell:hover { stroke: var(--accent); }
 .hex-cell.occupied { cursor: default; }
+.hex-cell.preview-range { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 2 2; }
+.hex-cell.preview-footprint { fill: var(--accent); fill-opacity: 0.35; stroke: var(--accent); stroke-width: 2; }
 .hex-reach-line { stroke: var(--accent); stroke-width: 1.5; opacity: 0.55; pointer-events: none; }
 .hex-arrowhead { fill: var(--accent); opacity: 0.55; }
 .hex-order-badge circle { fill: var(--accent); stroke: var(--bg2); stroke-width: 1.5; }
@@ -162,6 +164,8 @@ var MAX_ZOOM = 2;
 var ZOOM_STEP = 0.1;
 var zoomLevel = 1;
 
+var resolutionLogOpen = true;
+
 function getArray(id) {
   for (var i = 0; i < arrays.length; i++) { if (arrays[i].id === id) return arrays[i]; }
   return null;
@@ -176,6 +180,22 @@ var saveArrayDebounced = debounce(saveArray, 400);
 
 async function newArray() {
   var created = await api('POST', '/api/arrays', { name: 'Untitled Array', radius: 3, placements: [] });
+  await loadArrays();
+  renderArrayList();
+  openArray(created.id);
+}
+
+// Fresh placement ids on the copy, same as a brand-new placement would get
+// — keeps the two arrays' placements independently editable.
+async function duplicateArray(id) {
+  var arr = getArray(id);
+  if (!arr) return;
+  var clonedPlacements = (arr.placements || []).map(function(p) {
+    return Object.assign({}, p, { id: crypto.randomUUID() });
+  });
+  var created = await api('POST', '/api/arrays', {
+    name: arr.name + ' (copy)', radius: arr.radius, placements: clonedPlacements,
+  });
   await loadArrays();
   renderArrayList();
   openArray(created.id);
@@ -291,7 +311,7 @@ function svgEl(tag, attrs) {
   return el;
 }
 
-function renderHexBoard(arr, placements, zoom) {
+function renderHexBoard(arr, placements, zoom, reaches) {
   var boardHexes = Hex.hexDisk({ q: 0, r: 0 }, arr.radius);
   var occupied = occupiedHexMap(placements);
 
@@ -343,8 +363,9 @@ function renderHexBoard(arr, placements, zoom) {
   // target). When a pair reaches each other both ways, the two arrows are
   // offset to either side of the centerline instead of drawn on top of each
   // other — otherwise they'd fully overlap and hide each other's order
-  // badge, which is why badges used to appear to "skip" numbers.
-  var reaches = computeReaches(placements);
+  // badge, which is why badges used to appear to "skip" numbers. Computed
+  // once by the caller and shared with the resolution log so the two never
+  // disagree.
   var reachKeys = {};
   reaches.forEach(function(reach) {
     reachKeys[reach.from.placement.id + '>' + reach.to.placement.id] = true;
@@ -391,6 +412,105 @@ function renderHexBoard(arr, placements, zoom) {
   svg.style.cssText = 'position:absolute;top:0;left:0;transform-origin:0 0;transform:scale(' + zoom + ');';
   container.appendChild(svg);
   return container;
+}
+
+// A plain-text readout of the same reach order the board's numbered badges
+// show — badges are easy to lose track of on a dense or zoomed-out board,
+// so this is a readable fallback for "what order does this resolve in".
+function renderResolutionLog(reaches) {
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'border:0.5px solid var(--border);border-radius:var(--radius);background:var(--bg2);flex-shrink:0;';
+
+  var header = document.createElement('div');
+  header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:6px 10px;cursor:pointer;user-select:none;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.03em;';
+  var title = document.createElement('span');
+  title.textContent = 'Resolution order (' + reaches.length + ')';
+  var arrow = document.createElement('span');
+  arrow.textContent = resolutionLogOpen ? '▾' : '▸';
+  header.appendChild(title);
+  header.appendChild(arrow);
+  header.onclick = function() {
+    resolutionLogOpen = !resolutionLogOpen;
+    renderArrayEditor(getArray(currentArrayId));
+  };
+  wrap.appendChild(header);
+
+  if (resolutionLogOpen) {
+    var body = document.createElement('div');
+    body.style.cssText = 'max-height:130px;overflow-y:auto;padding:0 10px 8px;';
+    if (reaches.length === 0) {
+      var empty = document.createElement('div');
+      empty.style.cssText = 'font-size:11px;color:var(--text3);padding:2px 0 6px;';
+      empty.textContent = 'No reach lines yet — mark a placement as an Effector to see resolution order here.';
+      body.appendChild(empty);
+    } else {
+      var ol = document.createElement('ol');
+      ol.style.cssText = 'padding-left:18px;font-size:12px;line-height:1.7;';
+      reaches.forEach(function(reach) {
+        var li = document.createElement('li');
+        li.textContent = reach.from.ritual.name + ' → ' + reach.to.ritual.name + ' (distance ' + reach.distance + ')';
+        ol.appendChild(li);
+      });
+      body.appendChild(ol);
+    }
+    wrap.appendChild(body);
+  }
+  return wrap;
+}
+
+// Rasterizes the board (at its base 1x size, ignoring the current on-screen
+// zoom) to a downloadable PNG. Entirely client-side: the board is already
+// an SVG, so this clones it, inlines the handful of theme colors it needs
+// (a standalone SVG document can't see shared.css), and draws it to a
+// canvas at 2x for a crisper export.
+function exportBoardAsPng(arr) {
+  var svg = document.getElementById('hex-board-svg');
+  if (!svg) return;
+  var width = parseFloat(svg.getAttribute('width'));
+  var height = parseFloat(svg.getAttribute('height'));
+
+  var clone = svg.cloneNode(true);
+  clone.removeAttribute('style');
+
+  var cs = getComputedStyle(document.documentElement);
+  var styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+  styleEl.textContent =
+    '.hex-cell { fill: ' + cs.getPropertyValue('--bg') + '; stroke: ' + cs.getPropertyValue('--border2') + '; stroke-width: 1; }' +
+    '.hex-reach-line { stroke: ' + cs.getPropertyValue('--accent') + '; stroke-width: 1.5; opacity: 0.55; }' +
+    '.hex-arrowhead { fill: ' + cs.getPropertyValue('--accent') + '; opacity: 0.55; }' +
+    '.hex-order-badge circle { fill: ' + cs.getPropertyValue('--accent') + '; stroke: ' + cs.getPropertyValue('--bg2') + '; stroke-width: 1.5; }' +
+    '.hex-order-badge text { fill: #fff; font-size: 9px; font-weight: 600; text-anchor: middle; dominant-baseline: central; }' +
+    'text { font-family: system-ui, -apple-system, sans-serif; }';
+  clone.insertBefore(styleEl, clone.firstChild);
+
+  var bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  bgRect.setAttribute('width', '100%');
+  bgRect.setAttribute('height', '100%');
+  bgRect.setAttribute('fill', cs.getPropertyValue('--bg2'));
+  clone.insertBefore(bgRect, styleEl.nextSibling);
+
+  var xml = new XMLSerializer().serializeToString(clone);
+  var svgUrl = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }));
+
+  var img = new Image();
+  img.onload = function() {
+    var scale = 2;
+    var canvas = document.createElement('canvas');
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(svgUrl);
+    canvas.toBlob(function(blob) {
+      var link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = (arr.name || 'array').replace(/[^a-z0-9-_]+/gi, '_') + '.png';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }, 'image/png');
+  };
+  img.src = svgUrl;
 }
 
 // Restyles the already-rendered board in place for a new zoom level,
@@ -515,10 +635,20 @@ function renderArrayEditor(arr) {
   zoomDec.onclick = function() { setZoom(zoomLevel - ZOOM_STEP); };
   zoomInc.onclick = function() { setZoom(zoomLevel + ZOOM_STEP); };
 
+  var dupBtn = document.createElement('button');
+  dupBtn.textContent = 'Duplicate';
+  dupBtn.style.cssText = 'font-size:11px;padding:3px 10px;flex-shrink:0;margin-left:auto;';
+  dupBtn.onclick = function() { duplicateArray(arr.id); };
+
+  var exportBtn = document.createElement('button');
+  exportBtn.textContent = 'Export PNG';
+  exportBtn.style.cssText = 'font-size:11px;padding:3px 10px;flex-shrink:0;';
+  exportBtn.onclick = function() { exportBoardAsPng(arr); };
+
   var delBtn = document.createElement('button');
   delBtn.className = 'danger';
   delBtn.textContent = 'Delete';
-  delBtn.style.cssText = 'font-size:11px;padding:3px 10px;flex-shrink:0;margin-left:auto;';
+  delBtn.style.cssText = 'font-size:11px;padding:3px 10px;flex-shrink:0;';
   delBtn.onclick = function() { deleteArray(arr.id); };
 
   topBar.appendChild(nameInput);
@@ -530,24 +660,30 @@ function renderArrayEditor(arr) {
   topBar.appendChild(zoomDec);
   topBar.appendChild(zoomVal);
   topBar.appendChild(zoomInc);
+  topBar.appendChild(dupBtn);
+  topBar.appendChild(exportBtn);
   topBar.appendChild(delBtn);
+
+  var placements = livePlacements(arr);
+  var reaches = computeReaches(placements);
 
   // Board + placement list, side by side. The numbered badges on the board
   // show the order in which ritual effects reach each other — closest
-  // pairs (within the source ritual's range) resolve first.
+  // pairs (within the source ritual's range) resolve first; the
+  // resolution log above states the same order as plain text.
   var row = document.createElement('div');
   row.style.cssText = 'display:flex;gap:10px;flex:1;min-height:0;';
 
-  var placements = livePlacements(arr);
   var boardWrap = document.createElement('div');
   boardWrap.className = 'hex-board-wrap';
-  boardWrap.appendChild(renderHexBoard(arr, placements, zoomLevel));
+  boardWrap.appendChild(renderHexBoard(arr, placements, zoomLevel, reaches));
   attachZoomScroll(boardWrap);
 
   row.appendChild(boardWrap);
   row.appendChild(renderPlacementList(arr, placements));
 
   area.appendChild(topBar);
+  area.appendChild(renderResolutionLog(reaches));
   area.appendChild(row);
 }
 
@@ -631,6 +767,28 @@ function resizePlacement(arr, placementId, delta) {
   saveArray(arr);
 }
 
+// Highlights, directly on the already-rendered board, where a candidate
+// placement would sit (solid fill) and how far it would reach if later
+// marked an Effector (dashed ring) — live while the size picker is open,
+// so sizing a placement doesn't require placing it first to see its reach.
+function showRangePreview(hex, size) {
+  clearRangePreview();
+  var footprint = Hex.footprintHexes(hex, size);
+  var footprintKeys = {};
+  footprint.forEach(function(h) { footprintKeys[Hex.keyOf(h)] = true; });
+  Hex.hexDisk(hex, Hex.rangeForSize(size)).forEach(function(h) {
+    var el = document.querySelector('.hex-cell[data-q="' + h.q + '"][data-r="' + h.r + '"]');
+    if (!el) return;
+    el.classList.add(footprintKeys[Hex.keyOf(h)] ? 'preview-footprint' : 'preview-range');
+  });
+}
+
+function clearRangePreview() {
+  document.querySelectorAll('.preview-footprint, .preview-range').forEach(function(el) {
+    el.classList.remove('preview-footprint', 'preview-range');
+  });
+}
+
 function openRitualPicker(arr, hex) {
   closePicker();
   var picker = document.createElement('div');
@@ -640,6 +798,7 @@ function openRitualPicker(arr, hex) {
   // Size is chosen here, per-placement, before picking a ritual — it's
   // not a property of the ritual itself.
   var pickerSize = 1;
+  showRangePreview(hex, pickerSize);
   var sizeRow = document.createElement('div');
   sizeRow.className = 'picker-size-row';
   var sizeLabel = document.createElement('span'); sizeLabel.textContent = 'Size:';
@@ -651,11 +810,13 @@ function openRitualPicker(arr, hex) {
     pickerSize = Math.max(1, pickerSize - 1);
     sizeVal.textContent = pickerSize;
     rangeNote.textContent = '(range ' + Hex.rangeForSize(pickerSize) + ')';
+    showRangePreview(hex, pickerSize);
   };
   sizeInc.onclick = function() {
     pickerSize = Math.min(Hex.MAX_PLACEMENT_SIZE, pickerSize + 1);
     sizeVal.textContent = pickerSize;
     rangeNote.textContent = '(range ' + Hex.rangeForSize(pickerSize) + ')';
+    showRangePreview(hex, pickerSize);
   };
   sizeRow.appendChild(sizeLabel); sizeRow.appendChild(sizeDec); sizeRow.appendChild(sizeVal); sizeRow.appendChild(sizeInc); sizeRow.appendChild(rangeNote);
 
@@ -768,6 +929,7 @@ function outsidePickerClick(e) {
 function closePicker() {
   var picker = document.getElementById('ritual-picker');
   if (picker) picker.parentNode.removeChild(picker);
+  clearRangePreview();
   document.removeEventListener('click', outsidePickerClick);
 }
 
@@ -776,6 +938,10 @@ function closePicker() {
 async function init() {
   await Promise.all([loadLibrary(), loadArrays()]);
   renderArrayList();
+  // Lets a ritual's "used in arrays" backlink (index.html) jump straight
+  // to the array in question.
+  var openId = new URLSearchParams(window.location.search).get('open');
+  if (openId && getArray(openId)) openArray(openId);
 }
 init();
 </script>

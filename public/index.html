@@ -238,9 +238,13 @@
 
 var library = [];
 var customComponents = [];
+var arraysForBacklinks = [];
 
 async function loadLibrary() { library = await api('GET', '/api/rituals'); renderLibrary(); }
 async function loadComponents() { customComponents = await api('GET', '/api/components'); }
+// Only needed for the ritual detail view's "used in arrays" backlink —
+// kept separate from arrays.html's own richer array state.
+async function loadArraysForBacklinks() { arraysForBacklinks = await api('GET', '/api/arrays'); }
 
 async function deleteEntry(id) {
   await api('DELETE', '/api/rituals/' + id);
@@ -434,6 +438,16 @@ function openDetail(id) {
   html += '<div class="fl">Effect</div><div class="fv">' + esc(r.effect || '') + '</div>';
   var d = new Date(r.createdAt);
   html += '<div style="margin-top:0.5rem;font-size:11px;color:var(--text3)">Added ' + d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}) + ' · ' + subs.length + ' subsidiary rune' + (subs.length !== 1 ? 's' : '') + '</div>';
+
+  var usedIn = arraysForBacklinks.filter(function(a) {
+    return (a.placements || []).some(function(p) { return p.ritualId === r.id; });
+  });
+  if (usedIn.length > 0) {
+    html += '<div class="fl" style="margin-top:0.85rem;">Used in arrays</div>';
+    html += '<div class="fv" style="margin-bottom:0;">' + usedIn.map(function(a) {
+      return '<a href="arrays.html?open=' + encodeURIComponent(a.id) + '" style="color:var(--accent)">' + esc(a.name) + '</a>';
+    }).join(', ') + '</div>';
+  }
   html += '</div>';
 
   document.getElementById('detail-content').innerHTML = html;
@@ -841,7 +855,7 @@ function renderCustomCompList() {
 async function init() {
   renderFormPrimary();
   renderFormSubs();
-  await Promise.all([loadLibrary(), loadComponents()]);
+  await Promise.all([loadLibrary(), loadComponents(), loadArraysForBacklinks()]);
   renderRef();
   renderCustomCompList();
   if (window.location.hash === '#comps') switchTab('comps');
