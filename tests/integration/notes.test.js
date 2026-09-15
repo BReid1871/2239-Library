@@ -52,3 +52,45 @@ test('search matches title or body', async () => {
   const none = await request(app).get('/api/notes').query({ q: 'nonexistent' });
   expect(none.body).toHaveLength(0);
 });
+
+test('round-trips links through create and update, dropping malformed entries', async () => {
+  const ritual = await request(app).post('/api/rituals').send({
+    name: 'Veil of Pale Embers',
+    purpose: 'Boon',
+    primary: 'Aether',
+    subs: [],
+    effect: 'Test effect',
+  });
+
+  const create = await request(app).post('/api/notes').send({
+    title: 'Research',
+    body: 'Notes on the veil',
+    links: [
+      { type: 'ritual', id: ritual.body.id },
+      { type: 'component', rune: 'Aether', name: 'Chaotic Objects' },
+      { type: 'not-a-type', id: 'x' },
+      { type: 'ritual' },
+    ],
+  });
+  expect(create.status).toBe(201);
+  expect(create.body.links).toEqual([
+    { type: 'ritual', id: ritual.body.id },
+    { type: 'component', rune: 'Aether', name: 'Chaotic Objects' },
+  ]);
+
+  const update = await request(app)
+    .put('/api/notes/' + create.body.id)
+    .send({ links: [] });
+  expect(update.status).toBe(200);
+  expect(update.body.links).toEqual([]);
+
+  const bodyOnlyUpdate = await request(app)
+    .put('/api/notes/' + create.body.id)
+    .send({ body: 'Updated body only' });
+  expect(bodyOnlyUpdate.body.links).toEqual([]);
+});
+
+test('omitting links on create defaults to an empty array', async () => {
+  const create = await request(app).post('/api/notes').send({ title: 'x', body: 'y' });
+  expect(create.body.links).toEqual([]);
+});

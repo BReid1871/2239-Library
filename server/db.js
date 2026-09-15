@@ -11,14 +11,17 @@ const SCHEMA_STATEMENTS = [
     subs JSON NOT NULL,
     tier VARCHAR(16) NOT NULL,
     effect TEXT NOT NULL,
-    created_at VARCHAR(32) NOT NULL
+    created_at VARCHAR(32) NOT NULL,
+    tags JSON NOT NULL DEFAULT ('[]'),
+    components JSON NOT NULL DEFAULT ('[]')
   )`,
   `CREATE TABLE IF NOT EXISTS notes (
     id VARCHAR(36) PRIMARY KEY,
     title VARCHAR(255) NOT NULL DEFAULT '',
     body TEXT NOT NULL,
     created_at VARCHAR(32) NOT NULL,
-    updated_at VARCHAR(32) NOT NULL
+    updated_at VARCHAR(32) NOT NULL,
+    links JSON NOT NULL DEFAULT ('[]')
   )`,
   `CREATE TABLE IF NOT EXISTS custom_components (
     id VARCHAR(36) PRIMARY KEY,
@@ -75,6 +78,9 @@ const MIGRATIONS = [
   { table: 'arrays', column: 'cols', kind: 'drop', ddl: 'ALTER TABLE arrays DROP COLUMN cols' },
   { table: 'arrays', column: 'cells', kind: 'drop', ddl: 'ALTER TABLE arrays DROP COLUMN cells' },
   { table: 'arrays', column: 'history_seq', kind: 'add', ddl: 'ALTER TABLE arrays ADD COLUMN history_seq INT NOT NULL DEFAULT 0' },
+  { table: 'rituals', column: 'tags', kind: 'add', ddl: "ALTER TABLE rituals ADD COLUMN tags JSON NOT NULL DEFAULT ('[]')" },
+  { table: 'rituals', column: 'components', kind: 'add', ddl: "ALTER TABLE rituals ADD COLUMN components JSON NOT NULL DEFAULT ('[]')" },
+  { table: 'notes', column: 'links', kind: 'add', ddl: "ALTER TABLE notes ADD COLUMN links JSON NOT NULL DEFAULT ('[]')" },
 ];
 
 function resolveConnectionConfig() {

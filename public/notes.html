@@ -18,6 +18,26 @@
 .note-title-input:focus { border-bottom-color: var(--accent); }
 .note-body-input { flex: 1; border: none; background: transparent; color: var(--text); font-size: 14px; font-family: inherit; line-height: 1.7; outline: none; resize: none; min-height: 300px; }
 .note-meta { font-size: 11px; color: var(--text3); }
+
+/* Links */
+.note-links-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; position: relative; }
+.link-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px 3px 10px; border-radius: 99px; font-size: 12px; background: var(--bg2); border: 0.5px solid var(--border2); color: var(--text2); }
+.link-chip a { color: var(--text2); text-decoration: none; cursor: pointer; }
+.link-chip a:hover { color: var(--accent); }
+.link-chip-type { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.03em; }
+.link-chip-remove { border: none; background: none; color: var(--text3); cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; }
+.link-chip-remove:hover { color: var(--text); }
+.add-link-btn { font-size: 11px; padding: 3px 9px; }
+.link-picker { position: absolute; top: 100%; left: 0; margin-top: 6px; width: 280px; max-height: 320px; background: var(--bg); border: 0.5px solid var(--border2); border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0,0,0,0.15); z-index: 30; display: flex; flex-direction: column; }
+.link-picker-tabs { display: flex; border-bottom: 0.5px solid var(--border); flex-shrink: 0; }
+.link-picker-tab { flex: 1; text-align: center; font-size: 11px; padding: 6px 4px; cursor: pointer; color: var(--text3); border-bottom: 2px solid transparent; }
+.link-picker-tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 500; }
+.link-picker-search { padding: 6px 8px; border-bottom: 0.5px solid var(--border); flex-shrink: 0; }
+.link-picker-search input { font-size: 12px; padding: 5px 8px; }
+.link-picker-results { overflow-y: auto; padding: 4px; }
+.link-picker-item { padding: 6px 8px; border-radius: 5px; cursor: pointer; font-size: 12px; }
+.link-picker-item:hover { background: var(--bg2); }
+.link-picker-empty { font-size: 11px; color: var(--text3); padding: 10px 8px; text-align: center; }
 </style>
 </head>
 <body>
@@ -50,7 +70,25 @@ renderNav('nav', 'notes', [], function() {});
 var notes = [];
 async function loadNotes() { notes = await api('GET', '/api/notes'); }
 
+// Read-only: loaded so link chips can resolve labels and the picker can
+// search, same read-only pattern index.html uses for arraysForBacklinks.
+var linkableRituals = [];
+var linkableArrays = [];
+var linkableComponents = [];
+async function loadLinkables() {
+  var results = await Promise.all([
+    api('GET', '/api/rituals'),
+    api('GET', '/api/arrays'),
+    api('GET', '/api/components'),
+  ]);
+  linkableRituals = results[0];
+  linkableArrays = results[1];
+  linkableComponents = (window.COMPONENTS || []).concat(results[2]);
+}
+
 var currentNoteId = null;
+var linkPickerType = 'ritual';
+var linkPickerOpen = false;
 
 async function newNote() {
   var created = await api('POST', '/api/notes', { title: 'Untitled note', body: '' });
@@ -98,6 +136,165 @@ var saveNoteDebounced = debounce(function(id, patch) {
   }).catch(function(e) { console.error('Failed to save note', e); });
 }, 400);
 
+// ── Links ────────────────────────────────────────────────────────────────────
+
+function linkEquals(a, b) {
+  if (a.type !== b.type) return false;
+  if (a.type === 'component') return a.rune === b.rune && a.name === b.name;
+  return a.id === b.id;
+}
+
+function linkLabel(link) {
+  if (link.type === 'ritual') {
+    var r = linkableRituals.filter(function(x) { return x.id === link.id; })[0];
+    return r ? r.name : null;
+  }
+  if (link.type === 'array') {
+    var a = linkableArrays.filter(function(x) { return x.id === link.id; })[0];
+    return a ? a.name : null;
+  }
+  if (link.type === 'component') {
+    var c = linkableComponents.filter(function(x) { return x.rune === link.rune && x.name === link.name; })[0];
+    return c ? c.name : null;
+  }
+  return null;
+}
+
+function linkHref(link) {
+  if (link.type === 'ritual') return 'index.html?open=' + encodeURIComponent(link.id);
+  if (link.type === 'array') return 'arrays.html?open=' + encodeURIComponent(link.id);
+  return 'index.html?compRune=' + encodeURIComponent(link.rune) + '&compName=' + encodeURIComponent(link.name);
+}
+
+function saveNoteLinksNow(id, links) {
+  return api('PUT', '/api/notes/' + id, { links: links }).then(function(updated) {
+    var idx = notes.findIndex(function(nn) { return nn.id === id; });
+    if (idx >= 0) notes[idx] = updated;
+  });
+}
+
+function outsideLinkPickerClick(e) {
+  var picker = document.getElementById('link-picker');
+  if (picker && !picker.contains(e.target) && !e.target.classList.contains('add-link-btn')) closeLinkPicker();
+}
+
+function closeLinkPicker() {
+  var picker = document.getElementById('link-picker');
+  if (picker) picker.parentNode.removeChild(picker);
+  document.removeEventListener('click', outsideLinkPickerClick);
+}
+
+function toggleLinkPicker(row, n) {
+  if (document.getElementById('link-picker')) { closeLinkPicker(); return; }
+  linkPickerType = 'ritual';
+  var picker = document.createElement('div');
+  picker.id = 'link-picker';
+  picker.className = 'link-picker';
+  row.appendChild(picker);
+  renderLinkPicker(n);
+  setTimeout(function() { document.addEventListener('click', outsideLinkPickerClick); }, 0);
+}
+
+function linkPickerItems(type) {
+  if (type === 'ritual') return linkableRituals.map(function(r) { return { label: r.name, link: { type: 'ritual', id: r.id } }; });
+  if (type === 'array') return linkableArrays.map(function(a) { return { label: a.name, link: { type: 'array', id: a.id } }; });
+  return linkableComponents.map(function(c) { return { label: c.name + ' (' + c.rune + ')', link: { type: 'component', rune: c.rune, name: c.name } }; });
+}
+
+function renderLinkPicker(n) {
+  var picker = document.getElementById('link-picker');
+  if (!picker) return;
+  picker.innerHTML = '';
+
+  var tabs = document.createElement('div');
+  tabs.className = 'link-picker-tabs';
+  [['ritual', 'Rituals'], ['array', 'Arrays'], ['component', 'Components']].forEach(function(t) {
+    var tab = document.createElement('div');
+    tab.className = 'link-picker-tab' + (linkPickerType === t[0] ? ' active' : '');
+    tab.textContent = t[1];
+    tab.onclick = function() { linkPickerType = t[0]; renderLinkPicker(n); };
+    tabs.appendChild(tab);
+  });
+  picker.appendChild(tabs);
+
+  var searchWrap = document.createElement('div');
+  searchWrap.className = 'link-picker-search';
+  var search = document.createElement('input');
+  search.type = 'text';
+  search.placeholder = 'Search…';
+  searchWrap.appendChild(search);
+  picker.appendChild(searchWrap);
+
+  var results = document.createElement('div');
+  results.className = 'link-picker-results';
+  picker.appendChild(results);
+
+  search.oninput = function() { renderLinkPickerResults(n, results, search.value); };
+  renderLinkPickerResults(n, results, '');
+  search.focus();
+}
+
+function renderLinkPickerResults(n, resultsEl, q) {
+  resultsEl.innerHTML = '';
+  var qLower = q.toLowerCase();
+  var items = linkPickerItems(linkPickerType).filter(function(it) {
+    if ((n.links || []).some(function(l) { return linkEquals(l, it.link); })) return false;
+    return !qLower || it.label.toLowerCase().indexOf(qLower) >= 0;
+  });
+  if (items.length === 0) {
+    resultsEl.innerHTML = '<div class="link-picker-empty">No matches.</div>';
+    return;
+  }
+  items.forEach(function(it) {
+    var item = document.createElement('div');
+    item.className = 'link-picker-item';
+    item.textContent = it.label;
+    item.onclick = function() {
+      n.links = (n.links || []).concat([it.link]);
+      closeLinkPicker();
+      saveNoteLinksNow(n.id, n.links).then(function() { openNote(n.id); });
+    };
+    resultsEl.appendChild(item);
+  });
+}
+
+function renderLinksRow(n) {
+  var row = document.createElement('div');
+  row.className = 'note-links-row';
+
+  (n.links || []).forEach(function(link) {
+    var label = linkLabel(link);
+    if (!label) return; // target deleted since the link was made — skip it
+    var chip = document.createElement('span');
+    chip.className = 'link-chip';
+    var typeEl = document.createElement('span');
+    typeEl.className = 'link-chip-type';
+    typeEl.textContent = link.type;
+    var a = document.createElement('a');
+    a.href = linkHref(link);
+    a.textContent = label;
+    chip.appendChild(typeEl);
+    chip.appendChild(a);
+    var rm = document.createElement('button');
+    rm.className = 'link-chip-remove';
+    rm.textContent = '×';
+    rm.onclick = function() {
+      n.links = (n.links || []).filter(function(l) { return !linkEquals(l, link); });
+      saveNoteLinksNow(n.id, n.links).then(function() { openNote(n.id); });
+    };
+    chip.appendChild(rm);
+    row.appendChild(chip);
+  });
+
+  var addBtn = document.createElement('button');
+  addBtn.className = 'add-link-btn';
+  addBtn.textContent = '+ Link';
+  addBtn.onclick = function(e) { e.stopPropagation(); toggleLinkPicker(row, n); };
+  row.appendChild(addBtn);
+
+  return row;
+}
+
 function openNote(id) {
   var n = null;
   for (var i = 0; i < notes.length; i++) { if (notes[i].id === id) { n = notes[i]; break; } }
@@ -143,6 +340,7 @@ function openNote(id) {
   delBtn.onclick = function() { if (confirm('Delete this note?')) deleteNote(id); };
 
   editor.appendChild(titleInput);
+  editor.appendChild(renderLinksRow(n));
   editor.appendChild(bodyInput);
   editor.appendChild(meta);
   editor.appendChild(delBtn);
@@ -153,7 +351,7 @@ function openNote(id) {
 // ── Init ─────────────────────────────────────────────────────────────────────
 
 async function init() {
-  await loadNotes();
+  await Promise.all([loadNotes(), loadLinkables()]);
   renderNoteList();
 }
 init();

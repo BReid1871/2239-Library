@@ -204,6 +204,71 @@ test('a ritual detail page links back to arrays it is placed in', async ({ page,
   await request.delete(`/api/arrays/${arr.id}`);
 });
 
+test('tagging a ritual and filtering the library by that tag', async ({ page, request }) => {
+  await page.goto('/');
+
+  await page.locator('#f-name').fill('E2E Tagged Ritual');
+  await page.locator('#f-purpose').selectOption('Evocation');
+  await page.locator('#f-primary .tag', { hasText: 'Aether' }).click();
+  await page.locator('#f-effect').fill('Has a tag.');
+  await page.locator('#f-tag-input').fill('signature');
+  await page.locator('#f-tag-input').press('Enter');
+  await expect(page.locator('#f-tags .tag-chip', { hasText: 'signature' })).toBeVisible();
+  await page.getByRole('button', { name: 'Save to library' }).click();
+  await expect(page.locator('.rli-name', { hasText: 'E2E Tagged Ritual' })).toBeVisible();
+
+  await page.locator('#tag-filters .filter-chip', { hasText: 'signature' }).click();
+  await expect(page.locator('.rli-name')).toHaveCount(1);
+  await expect(page.locator('.rli-name', { hasText: 'E2E Tagged Ritual' })).toBeVisible();
+
+  const rituals = await (await request.get('/api/rituals')).json();
+  const created = rituals.find((r) => r.name === 'E2E Tagged Ritual');
+  await request.delete(`/api/rituals/${created.id}`);
+});
+
+test('attaching a component to a ritual shows it in the detail view', async ({ page, request }) => {
+  await page.goto('/');
+
+  await page.locator('#f-name').fill('E2E Component Ritual');
+  await page.locator('#f-purpose').selectOption('Enchantment');
+  await page.locator('#f-primary .tag', { hasText: 'Aether' }).click();
+  await page.locator('#f-components .tag', { hasText: 'Ghost Fire' }).click();
+  await page.locator('#f-effect').fill('Uses ghost fire.');
+  await page.getByRole('button', { name: 'Save to library' }).click();
+
+  await expect(page.locator('.rli-name', { hasText: 'E2E Component Ritual' })).toBeVisible();
+  await page.locator('.rli-name', { hasText: 'E2E Component Ritual' }).click();
+  await expect(page.locator('#detail-content .rune-chip', { hasText: 'Ghost Fire' })).toBeVisible();
+
+  const rituals = await (await request.get('/api/rituals')).json();
+  const created = rituals.find((r) => r.name === 'E2E Component Ritual');
+  expect(created.components).toEqual([{ rune: 'Aether', name: 'Ghost Fire' }]);
+  await request.delete(`/api/rituals/${created.id}`);
+});
+
+test('linking a note to a ritual and navigating via the chip', async ({ page, request }) => {
+  const ritual = await (await request.post('/api/rituals', { data: {
+    name: 'E2E Linked Ritual', purpose: 'Bailiwick', primary: 'Aether', subs: [], effect: 'a',
+  } })).json();
+
+  await page.goto('/notes.html');
+  await page.getByRole('button', { name: '+ New' }).click();
+  await page.locator('.note-title-input').fill('E2E Note');
+
+  await page.getByRole('button', { name: '+ Link' }).click();
+  await page.locator('.link-picker-search input').fill('E2E Linked Ritual');
+  await page.locator('.link-picker-item', { hasText: 'E2E Linked Ritual' }).click();
+
+  const chip = page.locator('.link-chip', { hasText: 'E2E Linked Ritual' });
+  await expect(chip).toBeVisible();
+  await expect(chip.locator('a')).toHaveAttribute('href', `index.html?open=${ritual.id}`);
+
+  await chip.locator('a').click();
+  await expect(page.locator('.ritual-name', { hasText: 'E2E Linked Ritual' })).toBeVisible();
+
+  await request.delete(`/api/rituals/${ritual.id}`);
+});
+
 test('Ctrl+scroll zooms the array board; a plain scroll does not', async ({ page, request }) => {
   const arr = await (await request.post('/api/arrays', { data: { name: 'E2E Zoom Array', radius: 5, placements: [] } })).json();
 

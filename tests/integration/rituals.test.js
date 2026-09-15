@@ -95,3 +95,69 @@ test('search matches name, effect, and rune fields, and returns everything for a
   const all = await request(app).get('/api/rituals');
   expect(all.body).toHaveLength(2);
 });
+
+test('round-trips tags and components through create, get, and update', async () => {
+  const create = await request(app).post('/api/rituals').send({
+    name: 'Veil of Pale Embers',
+    purpose: 'Boon',
+    primary: 'Aether',
+    subs: [],
+    effect: 'Test effect',
+    tags: ['  combat  ', 'utility', ''],
+    components: [{ rune: 'Aether', name: 'Chaotic Objects' }, { rune: 'Aether' }, { notRune: true }],
+  });
+  expect(create.status).toBe(201);
+  expect(create.body.tags).toEqual(['combat', 'utility']);
+  expect(create.body.components).toEqual([{ rune: 'Aether', name: 'Chaotic Objects' }]);
+
+  const get = await request(app).get('/api/rituals');
+  expect(get.body[0].tags).toEqual(['combat', 'utility']);
+  expect(get.body[0].components).toEqual([{ rune: 'Aether', name: 'Chaotic Objects' }]);
+
+  const update = await request(app)
+    .put('/api/rituals/' + create.body.id)
+    .send({
+      name: 'Veil of Pale Embers',
+      purpose: 'Boon',
+      primary: 'Aether',
+      subs: [],
+      effect: 'Test effect',
+      tags: ['solo'],
+      components: [],
+    });
+  expect(update.status).toBe(200);
+  expect(update.body.tags).toEqual(['solo']);
+  expect(update.body.components).toEqual([]);
+});
+
+test('omitting tags and components defaults them to empty arrays', async () => {
+  const create = await request(app).post('/api/rituals').send({
+    name: 'Plain Ritual',
+    purpose: 'Boon',
+    primary: 'Aether',
+    subs: [],
+    effect: 'Test effect',
+  });
+  expect(create.status).toBe(201);
+  expect(create.body.tags).toEqual([]);
+  expect(create.body.components).toEqual([]);
+});
+
+test('search matches a tag and a component name', async () => {
+  await request(app).post('/api/rituals').send({
+    name: 'Veil of Pale Embers',
+    purpose: 'Boon',
+    primary: 'Aether',
+    subs: [],
+    effect: 'Warms the room',
+    tags: ['combat'],
+    components: [{ rune: 'Aether', name: 'Chaotic Objects' }],
+  });
+  await request(app).post('/api/rituals').send({ name: 'Other', purpose: 'Boon', primary: 'Genesis', subs: [], effect: 'Grows a plant' });
+
+  const byTag = await request(app).get('/api/rituals').query({ q: 'combat' });
+  expect(byTag.body.map((r) => r.name)).toEqual(['Veil of Pale Embers']);
+
+  const byComponent = await request(app).get('/api/rituals').query({ q: 'Chaotic Objects' });
+  expect(byComponent.body.map((r) => r.name)).toEqual(['Veil of Pale Embers']);
+});

@@ -14,7 +14,21 @@ function rowToRitual(row) {
     tier: row.tier,
     effect: row.effect,
     createdAt: row.created_at,
+    tags: row.tags || [],
+    components: row.components || [],
   };
+}
+
+function sanitizeTags(tags) {
+  if (!Array.isArray(tags)) return [];
+  return tags.map((t) => String(t).trim()).filter(Boolean);
+}
+
+function sanitizeComponents(components) {
+  if (!Array.isArray(components)) return [];
+  return components
+    .filter((c) => c && typeof c.rune === 'string' && typeof c.name === 'string' && c.name.trim())
+    .map((c) => ({ rune: c.rune, name: c.name.trim() }));
 }
 
 function ritualsRouter(db) {
@@ -31,14 +45,16 @@ function ritualsRouter(db) {
       `SELECT * FROM rituals
        WHERE name LIKE ? OR purpose LIKE ? OR primary_rune LIKE ? OR effect LIKE ?
           OR JSON_SEARCH(subs, 'one', ?) IS NOT NULL
+          OR JSON_SEARCH(tags, 'one', ?) IS NOT NULL
+          OR JSON_SEARCH(components, 'one', ?) IS NOT NULL
        ORDER BY created_at DESC`,
-      [like, like, like, like, like]
+      [like, like, like, like, like, like, like]
     );
     res.json(rows.map(rowToRitual));
   }));
 
   router.post('/', asyncHandler(async (req, res) => {
-    const { name, purpose, primary, subs, effect } = req.body || {};
+    const { name, purpose, primary, subs, effect, tags, components } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Please enter a ritual name.' });
     if (!purpose) return res.status(400).json({ error: 'Please select a purpose.' });
     if (!primary) return res.status(400).json({ error: 'Please select a primary rune.' });
@@ -66,10 +82,23 @@ function ritualsRouter(db) {
       tier: getTier((subs || []).length),
       effect: String(effect).trim(),
       created_at: new Date().toISOString(),
+      tags: sanitizeTags(tags),
+      components: sanitizeComponents(components),
     };
     await db.query(
-      'INSERT INTO rituals (id, name, purpose, primary_rune, subs, tier, effect, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [row.id, row.name, row.purpose, row.primary_rune, JSON.stringify(row.subs), row.tier, row.effect, row.created_at]
+      'INSERT INTO rituals (id, name, purpose, primary_rune, subs, tier, effect, created_at, tags, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        row.id,
+        row.name,
+        row.purpose,
+        row.primary_rune,
+        JSON.stringify(row.subs),
+        row.tier,
+        row.effect,
+        row.created_at,
+        JSON.stringify(row.tags),
+        JSON.stringify(row.components),
+      ]
     );
     res.status(201).json(rowToRitual(row));
   }));
@@ -78,7 +107,7 @@ function ritualsRouter(db) {
     const [existingRows] = await db.query('SELECT * FROM rituals WHERE id = ?', [req.params.id]);
     if (existingRows.length === 0) return res.status(404).json({ error: 'Ritual not found.' });
 
-    const { name, purpose, primary, subs, effect } = req.body || {};
+    const { name, purpose, primary, subs, effect, tags, components } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Please enter a ritual name.' });
     if (!purpose) return res.status(400).json({ error: 'Please select a purpose.' });
     if (!primary) return res.status(400).json({ error: 'Please select a primary rune.' });
@@ -98,7 +127,7 @@ function ritualsRouter(db) {
     }
 
     await db.query(
-      'UPDATE rituals SET name=?, purpose=?, primary_rune=?, subs=?, tier=?, effect=? WHERE id=?',
+      'UPDATE rituals SET name=?, purpose=?, primary_rune=?, subs=?, tier=?, effect=?, tags=?, components=? WHERE id=?',
       [
         String(name).trim(),
         purpose,
@@ -106,6 +135,8 @@ function ritualsRouter(db) {
         JSON.stringify(subs || []),
         getTier((subs || []).length),
         String(effect).trim(),
+        JSON.stringify(sanitizeTags(tags)),
+        JSON.stringify(sanitizeComponents(components)),
         req.params.id,
       ]
     );
