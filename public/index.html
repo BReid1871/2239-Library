@@ -261,17 +261,45 @@
 var library = [];
 var customComponents = [];
 var arraysForBacklinks = [];
+var notesForBacklinks = [];
 
 async function loadLibrary() { library = await api('GET', '/api/rituals'); renderLibrary(); }
 async function loadComponents() { customComponents = await api('GET', '/api/components'); }
 // Only needed for the ritual detail view's "used in arrays" backlink —
 // kept separate from arrays.html's own richer array state.
 async function loadArraysForBacklinks() { arraysForBacklinks = await api('GET', '/api/arrays'); }
+// Same idea, for the "referenced in notes" backlink and component usage —
+// kept separate from notes.html's own richer note-editing state.
+async function loadNotesForBacklinks() { notesForBacklinks = await api('GET', '/api/notes'); }
+
+// Rituals and notes that reference a component (by rune + name) — used by
+// both the reference panel and the custom-components tab.
+function componentUsage(rune, name) {
+  var rituals = library.filter(function(r) {
+    return (r.components || []).some(function(c) { return c.rune === rune && c.name === name; });
+  });
+  var notes = notesForBacklinks.filter(function(n) {
+    return (n.links || []).some(function(l) { return l.type === 'component' && l.rune === rune && l.name === name; });
+  });
+  return { rituals: rituals, notes: notes };
+}
 
 async function deleteEntry(id) {
   await api('DELETE', '/api/rituals/' + id);
   if (currentDetailId === id) { currentDetailId = null; switchTab('add'); }
   await loadLibrary();
+}
+
+async function ritualHistoryAction(id, action) {
+  try {
+    await api('POST', '/api/rituals/' + id + '/' + action);
+  } catch (e) {
+    var msg = document.getElementById('detail-history-msg');
+    if (msg) msg.textContent = e.message;
+    return;
+  }
+  await loadLibrary();
+  openDetail(id);
 }
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -484,10 +512,13 @@ function openDetail(id) {
   html += '<span class="badge" style="background:var(--bg2);color:var(--text2);border:0.5px solid var(--border)">' + esc(r.purpose) + '</span>';
   html += '</div></div>';
   html += '<div style="display:flex;gap:6px;align-items:center;">';
+  html += '<button onclick="ritualHistoryAction(\'' + r.id + '\', \'undo\')" title="Undo last edit">&#8630; Undo</button>';
+  html += '<button onclick="ritualHistoryAction(\'' + r.id + '\', \'redo\')" title="Redo">&#8631; Redo</button>';
   html += '<button onclick="editEntry(\'' + r.id + '\')">Edit</button>';
   html += '<button class="danger" onclick="confirmDelete(\'' + r.id + '\')">Delete</button>';
   html += '</div>';
   html += '</div>';
+  html += '<div id="detail-history-msg" style="font-size:11px;color:var(--text3);min-height:1.2em;margin-top:2px;"></div>';
   html += '<div class="rune-row">' + chipHTML + '</div>';
   html += '<hr class="hdivider">';
   html += '<div class="fl">Effect</div><div class="fv">' + esc(r.effect || '') + '</div>';
@@ -521,6 +552,16 @@ function openDetail(id) {
     html += '<div class="fl" style="margin-top:0.85rem;">Used in arrays</div>';
     html += '<div class="fv" style="margin-bottom:0;">' + usedIn.map(function(a) {
       return '<a href="arrays.html?open=' + encodeURIComponent(a.id) + '" style="color:var(--accent)">' + esc(a.name) + '</a>';
+    }).join(', ') + '</div>';
+  }
+
+  var referencedIn = notesForBacklinks.filter(function(n) {
+    return (n.links || []).some(function(l) { return l.type === 'ritual' && l.id === r.id; });
+  });
+  if (referencedIn.length > 0) {
+    html += '<div class="fl" style="margin-top:0.85rem;">Referenced in notes</div>';
+    html += '<div class="fv" style="margin-bottom:0;">' + referencedIn.map(function(n) {
+      return '<a href="notes.html?open=' + encodeURIComponent(n.id) + '" style="color:var(--accent)">' + esc(n.title || 'Untitled note') + '</a>';
     }).join(', ') + '</div>';
   }
   html += '</div>';
@@ -803,14 +844,12 @@ function renderRef() {
         var span = document.createElement('span'); span.textContent = c.desc;
         card.appendChild(strong); card.appendChild(span);
 
-        var usedByRituals = library.filter(function(r) {
-          return (r.components || []).some(function(rc) { return rc.rune === c.rune && rc.name === c.name; });
-        });
-        if (usedByRituals.length > 0) {
+        var usage = componentUsage(c.rune, c.name);
+        if (usage.rituals.length > 0) {
           var usedNote = document.createElement('div');
           usedNote.className = 'used-in-note';
           usedNote.appendChild(document.createTextNode('Used in: '));
-          usedByRituals.forEach(function(r, idx) {
+          usage.rituals.forEach(function(r, idx) {
             if (idx > 0) usedNote.appendChild(document.createTextNode(', '));
             var link = document.createElement('a');
             link.textContent = r.name;
@@ -818,6 +857,19 @@ function renderRef() {
             usedNote.appendChild(link);
           });
           card.appendChild(usedNote);
+        }
+        if (usage.notes.length > 0) {
+          var usedNoteNotes = document.createElement('div');
+          usedNoteNotes.className = 'used-in-note';
+          usedNoteNotes.appendChild(document.createTextNode('Referenced in: '));
+          usage.notes.forEach(function(n, idx) {
+            if (idx > 0) usedNoteNotes.appendChild(document.createTextNode(', '));
+            var link = document.createElement('a');
+            link.href = 'notes.html?open=' + encodeURIComponent(n.id);
+            link.textContent = n.title || 'Untitled note';
+            usedNoteNotes.appendChild(link);
+          });
+          card.appendChild(usedNoteNotes);
         }
 
         block.appendChild(card);
@@ -923,7 +975,16 @@ function editCustomComponent(id) {
 async function deleteCustomComponent(id) {
   var c = null;
   for (var i = 0; i < customComponents.length; i++) { if (customComponents[i].id === id) { c = customComponents[i]; break; } }
-  if (!c || !confirm('Delete "' + c.name + '"?')) return;
+  if (!c) return;
+  var usage = componentUsage(c.rune, c.name);
+  var prompt = 'Delete "' + c.name + '"?';
+  if (usage.rituals.length > 0 || usage.notes.length > 0) {
+    var parts = [];
+    if (usage.rituals.length > 0) parts.push(usage.rituals.length + ' ritual' + (usage.rituals.length !== 1 ? 's' : ''));
+    if (usage.notes.length > 0) parts.push(usage.notes.length + ' note' + (usage.notes.length !== 1 ? 's' : ''));
+    prompt = 'Delete "' + c.name + '"? It\'s used by ' + parts.join(' and ') + ' — those references will point to a removed component.';
+  }
+  if (!confirm(prompt)) return;
   await api('DELETE', '/api/components/' + id);
   await loadComponents();
   renderCustomCompList();
@@ -980,6 +1041,15 @@ function renderCustomCompList() {
       metaEl.style.color = TIER_COLORS[c.tier] || 'var(--text3)';
       var descEl = document.createElement('div'); descEl.className = 'comp-list-item-desc'; descEl.textContent = c.desc;
       body.appendChild(nameEl); body.appendChild(metaEl); body.appendChild(descEl);
+      var usage = componentUsage(c.rune, c.name);
+      if (usage.rituals.length > 0 || usage.notes.length > 0) {
+        var usageEl = document.createElement('div'); usageEl.className = 'used-in-note';
+        var parts = [];
+        if (usage.rituals.length > 0) parts.push(usage.rituals.length + ' ritual' + (usage.rituals.length !== 1 ? 's' : ''));
+        if (usage.notes.length > 0) parts.push(usage.notes.length + ' note' + (usage.notes.length !== 1 ? 's' : ''));
+        usageEl.textContent = 'Used by ' + parts.join(', ');
+        body.appendChild(usageEl);
+      }
       var actions = document.createElement('div'); actions.className = 'comp-list-item-actions';
       var editBtn = document.createElement('button'); editBtn.textContent = 'Edit';
       editBtn.onclick = (function(id) { return function() { editCustomComponent(id); }; })(c.id);
@@ -998,7 +1068,7 @@ async function init() {
   renderFormPrimary();
   renderFormSubs();
   renderFormTags();
-  await Promise.all([loadLibrary(), loadComponents(), loadArraysForBacklinks()]);
+  await Promise.all([loadLibrary(), loadComponents(), loadArraysForBacklinks(), loadNotesForBacklinks()]);
 
   var params = new URLSearchParams(window.location.search);
   var openId = params.get('open');

@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { getTier, IGNORES } = require('../../public/reference-data');
 const { ritualsMatch, findRuneConflict } = require('../lib/rituals');
 const { asyncHandler } = require('../lib/asyncHandler');
+const { makeHistory } = require('../lib/history');
 
 function rowToRitual(row) {
   return {
@@ -33,6 +34,24 @@ function sanitizeComponents(components) {
 
 function ritualsRouter(db) {
   const router = express.Router();
+  const history = makeHistory(db, {
+    historyTable: 'ritual_history',
+    idColumn: 'ritual_id',
+    columns: [
+      { name: 'name' },
+      { name: 'purpose' },
+      { name: 'primary_rune' },
+      { name: 'subs', json: true },
+      { name: 'tier' },
+      { name: 'effect' },
+      { name: 'tags', json: true },
+      { name: 'components', json: true },
+    ],
+  });
+
+  async function withHistoryFlags(row) {
+    return { ...rowToRitual(row), ...(await history.flags(row.id, row.history_seq)) };
+  }
 
   router.get('/', asyncHandler(async (req, res) => {
     const q = (req.query.q || '').trim();
@@ -84,9 +103,10 @@ function ritualsRouter(db) {
       created_at: new Date().toISOString(),
       tags: sanitizeTags(tags),
       components: sanitizeComponents(components),
+      history_seq: 0,
     };
     await db.query(
-      'INSERT INTO rituals (id, name, purpose, primary_rune, subs, tier, effect, created_at, tags, components) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO rituals (id, name, purpose, primary_rune, subs, tier, effect, created_at, tags, components, history_seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         row.id,
         row.name,
@@ -98,9 +118,11 @@ function ritualsRouter(db) {
         row.created_at,
         JSON.stringify(row.tags),
         JSON.stringify(row.components),
+        row.history_seq,
       ]
     );
-    res.status(201).json(rowToRitual(row));
+    await history.insertSnapshot(row.id, 0, row, row.created_at);
+    res.status(201).json({ ...rowToRitual(row), canUndo: false, canRedo: false });
   }));
 
   router.put('/:id', asyncHandler(async (req, res) => {
@@ -126,27 +148,97 @@ function ritualsRouter(db) {
       return res.status(409).json({ error: `Duplicate: "${dupe.name}" already uses this purpose + rune combination.` });
     }
 
+    const values = {
+      name: String(name).trim(),
+      purpose,
+      primary_rune: primary,
+      subs: subs || [],
+      tier: getTier((subs || []).length),
+      effect: String(effect).trim(),
+      tags: sanitizeTags(tags),
+      components: sanitizeComponents(components),
+    };
+    const timestamp = new Date().toISOString();
+    const nextSeq = await history.recordEdit(req.params.id, existingRows[0], values, timestamp);
+    if (nextSeq === null) return res.json(await withHistoryFlags(existingRows[0]));
+
     await db.query(
-      'UPDATE rituals SET name=?, purpose=?, primary_rune=?, subs=?, tier=?, effect=?, tags=?, components=? WHERE id=?',
+      'UPDATE rituals SET name=?, purpose=?, primary_rune=?, subs=?, tier=?, effect=?, tags=?, components=?, history_seq=? WHERE id=?',
       [
-        String(name).trim(),
-        purpose,
-        primary,
-        JSON.stringify(subs || []),
-        getTier((subs || []).length),
-        String(effect).trim(),
-        JSON.stringify(sanitizeTags(tags)),
-        JSON.stringify(sanitizeComponents(components)),
+        values.name,
+        values.purpose,
+        values.primary_rune,
+        JSON.stringify(values.subs),
+        values.tier,
+        values.effect,
+        JSON.stringify(values.tags),
+        JSON.stringify(values.components),
+        nextSeq,
         req.params.id,
       ]
     );
     const [updatedRows] = await db.query('SELECT * FROM rituals WHERE id = ?', [req.params.id]);
-    res.json(rowToRitual(updatedRows[0]));
+    res.json(await withHistoryFlags(updatedRows[0]));
+  }));
+
+  router.post('/:id/undo', asyncHandler(async (req, res) => {
+    const [existingRows] = await db.query('SELECT * FROM rituals WHERE id = ?', [req.params.id]);
+    if (existingRows.length === 0) return res.status(404).json({ error: 'Ritual not found.' });
+    const existing = existingRows[0];
+
+    const snapshot = await history.shift(req.params.id, existing.history_seq, -1);
+    if (!snapshot) return res.status(409).json({ error: 'Nothing to undo.' });
+
+    await db.query(
+      'UPDATE rituals SET name=?, purpose=?, primary_rune=?, subs=?, tier=?, effect=?, tags=?, components=?, history_seq=? WHERE id=?',
+      [
+        snapshot.name,
+        snapshot.purpose,
+        snapshot.primary_rune,
+        JSON.stringify(snapshot.subs),
+        snapshot.tier,
+        snapshot.effect,
+        JSON.stringify(snapshot.tags),
+        JSON.stringify(snapshot.components),
+        snapshot.seq,
+        req.params.id,
+      ]
+    );
+    const [updatedRows] = await db.query('SELECT * FROM rituals WHERE id = ?', [req.params.id]);
+    res.json(await withHistoryFlags(updatedRows[0]));
+  }));
+
+  router.post('/:id/redo', asyncHandler(async (req, res) => {
+    const [existingRows] = await db.query('SELECT * FROM rituals WHERE id = ?', [req.params.id]);
+    if (existingRows.length === 0) return res.status(404).json({ error: 'Ritual not found.' });
+    const existing = existingRows[0];
+
+    const snapshot = await history.shift(req.params.id, existing.history_seq, 1);
+    if (!snapshot) return res.status(409).json({ error: 'Nothing to redo.' });
+
+    await db.query(
+      'UPDATE rituals SET name=?, purpose=?, primary_rune=?, subs=?, tier=?, effect=?, tags=?, components=?, history_seq=? WHERE id=?',
+      [
+        snapshot.name,
+        snapshot.purpose,
+        snapshot.primary_rune,
+        JSON.stringify(snapshot.subs),
+        snapshot.tier,
+        snapshot.effect,
+        JSON.stringify(snapshot.tags),
+        JSON.stringify(snapshot.components),
+        snapshot.seq,
+        req.params.id,
+      ]
+    );
+    const [updatedRows] = await db.query('SELECT * FROM rituals WHERE id = ?', [req.params.id]);
+    res.json(await withHistoryFlags(updatedRows[0]));
   }));
 
   router.delete('/:id', asyncHandler(async (req, res) => {
     const [result] = await db.query('DELETE FROM rituals WHERE id = ?', [req.params.id]);
     if (result.affectedRows === 0) return res.status(404).json({ error: 'Ritual not found.' });
+    await db.query('DELETE FROM ritual_history WHERE ritual_id = ?', [req.params.id]);
     res.status(204).end();
   }));
 

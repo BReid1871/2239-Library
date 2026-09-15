@@ -94,3 +94,68 @@ test('omitting links on create defaults to an empty array', async () => {
   const create = await request(app).post('/api/notes').send({ title: 'x', body: 'y' });
   expect(create.body.links).toEqual([]);
 });
+
+test('undo/redo round-trips through an edit, and reports when there is nothing to undo/redo', async () => {
+  const create = await request(app).post('/api/notes').send({ title: 'Original', body: 'First draft' });
+  expect(create.body.canUndo).toBe(false);
+  expect(create.body.canRedo).toBe(false);
+
+  const noUndo = await request(app).post('/api/notes/' + create.body.id + '/undo');
+  expect(noUndo.status).toBe(409);
+
+  const edit = await request(app)
+    .put('/api/notes/' + create.body.id)
+    .send({ title: 'Renamed', body: 'Second draft' });
+  expect(edit.status).toBe(200);
+  expect(edit.body.title).toBe('Renamed');
+  expect(edit.body.canUndo).toBe(true);
+  expect(edit.body.canRedo).toBe(false);
+
+  const undo = await request(app).post('/api/notes/' + create.body.id + '/undo');
+  expect(undo.status).toBe(200);
+  expect(undo.body.title).toBe('Original');
+  expect(undo.body.body).toBe('First draft');
+  expect(undo.body.canUndo).toBe(false);
+  expect(undo.body.canRedo).toBe(true);
+
+  const noUndoAgain = await request(app).post('/api/notes/' + create.body.id + '/undo');
+  expect(noUndoAgain.status).toBe(409);
+
+  const redo = await request(app).post('/api/notes/' + create.body.id + '/redo');
+  expect(redo.status).toBe(200);
+  expect(redo.body.title).toBe('Renamed');
+  expect(redo.body.body).toBe('Second draft');
+  expect(redo.body.canUndo).toBe(true);
+  expect(redo.body.canRedo).toBe(false);
+
+  const noRedo = await request(app).post('/api/notes/' + create.body.id + '/redo');
+  expect(noRedo.status).toBe(409);
+});
+
+test('a PUT that changes nothing does not add a history entry', async () => {
+  const create = await request(app).post('/api/notes').send({ title: 'Steady', body: 'Unchanged' });
+  const noop = await request(app)
+    .put('/api/notes/' + create.body.id)
+    .send({ title: 'Steady', body: 'Unchanged' });
+  expect(noop.body.canUndo).toBe(false);
+});
+
+test('a new edit after an undo discards the old redo branch', async () => {
+  const create = await request(app).post('/api/notes').send({ title: 'A', body: '' });
+  await request(app).put('/api/notes/' + create.body.id).send({ title: 'B', body: '' });
+  await request(app).post('/api/notes/' + create.body.id + '/undo');
+
+  const edit = await request(app).put('/api/notes/' + create.body.id).send({ title: 'C', body: '' });
+  expect(edit.body.title).toBe('C');
+  expect(edit.body.canRedo).toBe(false);
+
+  const redo = await request(app).post('/api/notes/' + create.body.id + '/redo');
+  expect(redo.status).toBe(409);
+});
+
+test('undo/redo 404 for a note that does not exist', async () => {
+  const undo = await request(app).post('/api/notes/nope/undo');
+  expect(undo.status).toBe(404);
+  const redo = await request(app).post('/api/notes/nope/redo');
+  expect(redo.status).toBe(404);
+});

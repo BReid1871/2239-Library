@@ -269,6 +269,77 @@ test('linking a note to a ritual and navigating via the chip', async ({ page, re
   await request.delete(`/api/rituals/${ritual.id}`);
 });
 
+test('a ritual detail page links back to notes that reference it', async ({ page, request }) => {
+  const ritual = await (await request.post('/api/rituals', { data: {
+    name: 'Note Backlink Ritual', purpose: 'Boon', primary: 'Genesis', subs: [], effect: 'a',
+  } })).json();
+  const note = await (await request.post('/api/notes', { data: {
+    title: 'E2E Backlink Note', body: 'References the ritual.', links: [{ type: 'ritual', id: ritual.id }],
+  } })).json();
+
+  await page.goto('/');
+  await page.locator('.rli-name', { hasText: 'Note Backlink Ritual' }).click();
+
+  const link = page.locator('#detail-content a', { hasText: 'E2E Backlink Note' });
+  await expect(link).toHaveAttribute('href', `notes.html?open=${note.id}`);
+
+  await link.click();
+  await expect(page.locator('.note-title-input')).toHaveValue('E2E Backlink Note');
+
+  await request.delete(`/api/notes/${note.id}`);
+  await request.delete(`/api/rituals/${ritual.id}`);
+});
+
+test('undoing and redoing a ritual edit from the detail view', async ({ page, request }) => {
+  const ritual = await (await request.post('/api/rituals', { data: {
+    name: 'Undo Ritual', purpose: 'Evocation', primary: 'Ruin', subs: [], effect: 'Original effect.',
+  } })).json();
+  await request.put(`/api/rituals/${ritual.id}`, { data: {
+    name: 'Undo Ritual Renamed', purpose: 'Evocation', primary: 'Ruin', subs: [], effect: 'Original effect.',
+  } });
+
+  await page.goto('/');
+  await page.locator('.rli-name', { hasText: 'Undo Ritual Renamed' }).click();
+  await expect(page.locator('.ritual-name')).toHaveText('Undo Ritual Renamed');
+
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.locator('.ritual-name')).toHaveText('Undo Ritual');
+
+  await page.getByRole('button', { name: 'Redo' }).click();
+  await expect(page.locator('.ritual-name')).toHaveText('Undo Ritual Renamed');
+
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.locator('#detail-history-msg')).toHaveText('Nothing to undo.');
+
+  await request.delete(`/api/rituals/${ritual.id}`);
+});
+
+test('deleting a used custom component warns how many rituals and notes reference it', async ({ page, request }) => {
+  await request.post('/api/components', { data: {
+    name: 'E2E Delete Guard Component', rune: 'Aether', tier: 'Low', desc: 'Used elsewhere.',
+  } });
+  const ritual = await (await request.post('/api/rituals', { data: {
+    name: 'Uses Guarded Component', purpose: 'Bailiwick', primary: 'Aether', subs: [], effect: 'a',
+    components: [{ rune: 'Aether', name: 'E2E Delete Guard Component' }],
+  } })).json();
+
+  await page.goto('/');
+  await page.locator('#tab-comps').click();
+
+  const item = page.locator('.comp-list-item', { hasText: 'E2E Delete Guard Component' });
+  await expect(item.locator('.used-in-note')).toHaveText('Used by 1 ritual');
+
+  let dialogMessage = '';
+  page.once('dialog', async (dialog) => { dialogMessage = dialog.message(); await dialog.accept(); });
+  await item.getByRole('button', { name: 'Delete' }).click();
+  expect(dialogMessage).toContain('used by 1 ritual');
+
+  await expect(page.locator('.comp-list-item', { hasText: 'E2E Delete Guard Component' })).toHaveCount(0);
+
+  await request.delete(`/api/rituals/${ritual.id}`);
+});
+
 test('Ctrl+scroll zooms the array board; a plain scroll does not', async ({ page, request }) => {
   const arr = await (await request.post('/api/arrays', { data: { name: 'E2E Zoom Array', radius: 5, placements: [] } })).json();
 
