@@ -17,6 +17,7 @@ function rowToRitual(row) {
     createdAt: row.created_at,
     tags: row.tags || [],
     components: row.components || [],
+    triggerable: !!row.triggerable,
   };
 }
 
@@ -46,6 +47,7 @@ function ritualsRouter(db) {
       { name: 'effect' },
       { name: 'tags', json: true },
       { name: 'components', json: true },
+      { name: 'triggerable' },
     ],
   });
 
@@ -73,7 +75,7 @@ function ritualsRouter(db) {
   }));
 
   router.post('/', asyncHandler(async (req, res) => {
-    const { name, purpose, primary, subs, effect, tags, components } = req.body || {};
+    const { name, purpose, primary, subs, effect, tags, components, triggerable } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Please enter a ritual name.' });
     if (!purpose) return res.status(400).json({ error: 'Please select a purpose.' });
     if (!primary) return res.status(400).json({ error: 'Please select a primary rune.' });
@@ -103,10 +105,11 @@ function ritualsRouter(db) {
       created_at: new Date().toISOString(),
       tags: sanitizeTags(tags),
       components: sanitizeComponents(components),
+      triggerable: triggerable !== false ? 1 : 0,
       history_seq: 0,
     };
     await db.query(
-      'INSERT INTO rituals (id, name, purpose, primary_rune, subs, tier, effect, created_at, tags, components, history_seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO rituals (id, name, purpose, primary_rune, subs, tier, effect, created_at, tags, components, triggerable, history_seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         row.id,
         row.name,
@@ -118,6 +121,7 @@ function ritualsRouter(db) {
         row.created_at,
         JSON.stringify(row.tags),
         JSON.stringify(row.components),
+        row.triggerable,
         row.history_seq,
       ]
     );
@@ -129,7 +133,7 @@ function ritualsRouter(db) {
     const [existingRows] = await db.query('SELECT * FROM rituals WHERE id = ?', [req.params.id]);
     if (existingRows.length === 0) return res.status(404).json({ error: 'Ritual not found.' });
 
-    const { name, purpose, primary, subs, effect, tags, components } = req.body || {};
+    const { name, purpose, primary, subs, effect, tags, components, triggerable } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Please enter a ritual name.' });
     if (!purpose) return res.status(400).json({ error: 'Please select a purpose.' });
     if (!primary) return res.status(400).json({ error: 'Please select a primary rune.' });
@@ -157,13 +161,14 @@ function ritualsRouter(db) {
       effect: String(effect).trim(),
       tags: sanitizeTags(tags),
       components: sanitizeComponents(components),
+      triggerable: triggerable !== false ? 1 : 0,
     };
     const timestamp = new Date().toISOString();
     const nextSeq = await history.recordEdit(req.params.id, existingRows[0], values, timestamp);
     if (nextSeq === null) return res.json(await withHistoryFlags(existingRows[0]));
 
     await db.query(
-      'UPDATE rituals SET name=?, purpose=?, primary_rune=?, subs=?, tier=?, effect=?, tags=?, components=?, history_seq=? WHERE id=?',
+      'UPDATE rituals SET name=?, purpose=?, primary_rune=?, subs=?, tier=?, effect=?, tags=?, components=?, triggerable=?, history_seq=? WHERE id=?',
       [
         values.name,
         values.purpose,
@@ -173,6 +178,7 @@ function ritualsRouter(db) {
         values.effect,
         JSON.stringify(values.tags),
         JSON.stringify(values.components),
+        values.triggerable,
         nextSeq,
         req.params.id,
       ]
@@ -190,7 +196,7 @@ function ritualsRouter(db) {
     if (!snapshot) return res.status(409).json({ error: 'Nothing to undo.' });
 
     await db.query(
-      'UPDATE rituals SET name=?, purpose=?, primary_rune=?, subs=?, tier=?, effect=?, tags=?, components=?, history_seq=? WHERE id=?',
+      'UPDATE rituals SET name=?, purpose=?, primary_rune=?, subs=?, tier=?, effect=?, tags=?, components=?, triggerable=?, history_seq=? WHERE id=?',
       [
         snapshot.name,
         snapshot.purpose,
@@ -200,6 +206,7 @@ function ritualsRouter(db) {
         snapshot.effect,
         JSON.stringify(snapshot.tags),
         JSON.stringify(snapshot.components),
+        snapshot.triggerable,
         snapshot.seq,
         req.params.id,
       ]
@@ -217,7 +224,7 @@ function ritualsRouter(db) {
     if (!snapshot) return res.status(409).json({ error: 'Nothing to redo.' });
 
     await db.query(
-      'UPDATE rituals SET name=?, purpose=?, primary_rune=?, subs=?, tier=?, effect=?, tags=?, components=?, history_seq=? WHERE id=?',
+      'UPDATE rituals SET name=?, purpose=?, primary_rune=?, subs=?, tier=?, effect=?, tags=?, components=?, triggerable=?, history_seq=? WHERE id=?',
       [
         snapshot.name,
         snapshot.purpose,
@@ -227,6 +234,7 @@ function ritualsRouter(db) {
         snapshot.effect,
         JSON.stringify(snapshot.tags),
         JSON.stringify(snapshot.components),
+        snapshot.triggerable,
         snapshot.seq,
         req.params.id,
       ]

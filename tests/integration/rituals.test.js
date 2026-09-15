@@ -232,3 +232,41 @@ test('undo/redo 404 for a ritual that does not exist', async () => {
   const redo = await request(app).post('/api/rituals/nope/redo');
   expect(redo.status).toBe(404);
 });
+
+test('triggerable defaults to true when omitted, and persists false when sent', async () => {
+  const defaulted = await request(app).post('/api/rituals').send({
+    name: 'Defaulted', purpose: 'Boon', primary: 'Aether', subs: [], effect: 'E1',
+  });
+  expect(defaulted.body.triggerable).toBe(true);
+
+  const nonTriggerable = await request(app).post('/api/rituals').send({
+    name: 'Non-triggerable', purpose: 'Boon', primary: 'Genesis', subs: [], effect: 'E1', triggerable: false,
+  });
+  expect(nonTriggerable.body.triggerable).toBe(false);
+
+  const get = await request(app).get('/api/rituals');
+  const found = get.body.find((r) => r.id === nonTriggerable.body.id);
+  expect(found.triggerable).toBe(false);
+
+  const update = await request(app)
+    .put('/api/rituals/' + nonTriggerable.body.id)
+    .send({ name: 'Non-triggerable', purpose: 'Boon', primary: 'Genesis', subs: [], effect: 'E1', triggerable: true });
+  expect(update.body.triggerable).toBe(true);
+});
+
+test('triggerable round-trips through undo/redo', async () => {
+  const create = await request(app).post('/api/rituals').send({
+    name: 'Toggle', purpose: 'Boon', primary: 'Aether', subs: [], effect: 'E1', triggerable: true,
+  });
+
+  const edit = await request(app)
+    .put('/api/rituals/' + create.body.id)
+    .send({ name: 'Toggle', purpose: 'Boon', primary: 'Aether', subs: [], effect: 'E1', triggerable: false });
+  expect(edit.body.triggerable).toBe(false);
+
+  const undo = await request(app).post('/api/rituals/' + create.body.id + '/undo');
+  expect(undo.body.triggerable).toBe(true);
+
+  const redo = await request(app).post('/api/rituals/' + create.body.id + '/redo');
+  expect(redo.body.triggerable).toBe(false);
+});
