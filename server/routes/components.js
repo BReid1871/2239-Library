@@ -26,7 +26,16 @@ function componentsRouter(db) {
   }
 
   router.get('/', asyncHandler(async (req, res) => {
-    const [rows] = await db.query('SELECT * FROM custom_components');
+    const q = (req.query.q || '').trim();
+    if (!q) {
+      const [rows] = await db.query('SELECT * FROM custom_components');
+      return res.json(rows);
+    }
+    const like = `%${q}%`;
+    const [rows] = await db.query(
+      'SELECT * FROM custom_components WHERE name LIKE ? OR `desc` LIKE ? OR rune LIKE ?',
+      [like, like, like]
+    );
     res.json(rows);
   }));
 

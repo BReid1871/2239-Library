@@ -76,3 +76,17 @@ test('rejects a description over 65535 bytes with a 400 instead of a DB error', 
   expect(res.status).toBe(400);
   expect(res.body.error).toMatch(/too long/i);
 });
+
+test('search matches name, desc, or rune', async () => {
+  await request(app).post('/api/components').send({ name: 'Ember Glass', rune: 'Vigour', tier: 'Low', desc: 'A test component' });
+  await request(app).post('/api/components').send({ name: 'Frost Shard', rune: 'Lethargy', tier: 'Low', desc: 'Another one' });
+
+  const byName = await request(app).get('/api/components').query({ q: 'ember' });
+  expect(byName.body.map((c) => c.name)).toEqual(['Ember Glass']);
+
+  const byDesc = await request(app).get('/api/components').query({ q: 'another' });
+  expect(byDesc.body.map((c) => c.name)).toEqual(['Frost Shard']);
+
+  const byRune = await request(app).get('/api/components').query({ q: 'Lethargy' });
+  expect(byRune.body.map((c) => c.name)).toEqual(['Frost Shard']);
+});

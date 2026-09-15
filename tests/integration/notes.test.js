@@ -38,3 +38,17 @@ test('404s updating or deleting a note that does not exist', async () => {
   const del = await request(app).delete('/api/notes/nope');
   expect(del.status).toBe(404);
 });
+
+test('search matches title or body', async () => {
+  await request(app).post('/api/notes').send({ title: 'Meeting notes', body: 'Talked about runes' });
+  await request(app).post('/api/notes').send({ title: 'Shopping list', body: 'Eggs, milk' });
+
+  const byTitle = await request(app).get('/api/notes').query({ q: 'meeting' });
+  expect(byTitle.body.map((n) => n.title)).toEqual(['Meeting notes']);
+
+  const byBody = await request(app).get('/api/notes').query({ q: 'eggs' });
+  expect(byBody.body.map((n) => n.title)).toEqual(['Shopping list']);
+
+  const none = await request(app).get('/api/notes').query({ q: 'nonexistent' });
+  expect(none.body).toHaveLength(0);
+});

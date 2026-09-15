@@ -89,11 +89,6 @@
     <div class="lib-header">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
         <h2>Library</h2>
-        <div style="display:flex;gap:4px;">
-          <button onclick="downloadLibrary()" title="Export library as JSON" style="font-size:11px;padding:3px 8px;border-radius:6px;">&#8595; Export</button>
-          <button onclick="document.getElementById('import-input').click()" title="Import library from JSON" style="font-size:11px;padding:3px 8px;border-radius:6px;">&#8593; Import</button>
-          <input type="file" id="import-input" accept=".json" style="display:none" onchange="importLibrary(event)">
-        </div>
       </div>
       <p id="lib-count-sub">0 rituals</p>
     </div>
@@ -654,45 +649,6 @@ function renderRef() {
   }
 
   renderRefTabs();
-}
-
-// ── Export / Import ──────────────────────────────────────────────────────────
-
-async function downloadLibrary() {
-  var data = await api('GET', '/api/export');
-  if (data.rituals.length === 0 && data.notes.length === 0 && data.arrays.length === 0) { alert("Nothing to export."); return; }
-  var json = JSON.stringify(data, null, 2);
-  var blob = new Blob([json], {type: "application/json"});
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement("a");
-  a.href = url;
-  a.download = "ritual_library_" + new Date().toISOString().slice(0,10) + ".json";
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function importLibrary(event) {
-  var file = event.target.files[0];
-  if (!file) return;
-  var reader = new FileReader();
-  reader.onload = async function(e) {
-    try {
-      var parsed = JSON.parse(e.target.result);
-      var result = await api('POST', '/api/import', parsed);
-      await loadLibrary();
-
-      var msg = 'Imported ' + result.addedR + ' ritual' + (result.addedR !== 1 ? 's' : '');
-      if (result.dupesR)   msg += ', skipped ' + result.dupesR + ' duplicate' + (result.dupesR !== 1 ? 's' : '');
-      if (result.skippedR) msg += ', skipped ' + result.skippedR + ' invalid';
-      if (result.addedN)   msg += ', ' + result.addedN + ' note' + (result.addedN !== 1 ? 's' : '');
-      if (result.addedA)   msg += ', ' + result.addedA + ' array' + (result.addedA !== 1 ? 's' : '');
-      alert(msg + '.');
-    } catch(err) {
-      alert('Failed to import: ' + err.message);
-    }
-    event.target.value = '';
-  };
-  reader.readAsText(file);
 }
 
 // ── Sort ─────────────────────────────────────────────────────────────────────

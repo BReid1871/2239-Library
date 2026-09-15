@@ -6,7 +6,16 @@ function notesRouter(db) {
   const router = express.Router();
 
   router.get('/', asyncHandler(async (req, res) => {
-    const [rows] = await db.query('SELECT * FROM notes ORDER BY created_at DESC');
+    const q = (req.query.q || '').trim();
+    if (!q) {
+      const [rows] = await db.query('SELECT * FROM notes ORDER BY created_at DESC');
+      return res.json(rows);
+    }
+    const like = `%${q}%`;
+    const [rows] = await db.query(
+      'SELECT * FROM notes WHERE title LIKE ? OR body LIKE ? ORDER BY created_at DESC',
+      [like, like]
+    );
     res.json(rows);
   }));
 
